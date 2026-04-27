@@ -1,0 +1,73 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  min-width: var(--page-min-width);
+  min-height: 100%;
+}
+
+body {
+  min-width: var(--page-min-width);
+  min-height: 100vh;
+  margin: 0;
+  overflow-x: auto;
+  font-family: var(--font-main-text);
+  color: var(--color-text);
+  background-color: var(--color-white);
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button {
+  color: inherit;
+}
+
+img {
+  max-width: 100%;
+}
+
+ul,
+ol {
+  margin: 0;
+}
+
+p,
+h1,
+h2,
+h3 {
+  margin: 0;
+}
+
+.sidebar__title,
+.popular__title,
+.collection__title {
+  font-family: var(--font-title);
+}
+
+.sidebar__button,
+.history__title,
+.modal__title,
+.create-form__name,
+.recipe-card__title,
+.recipe-card__time {
+  font-family: var(--font-title-text);
+}
+
+.recipe-card__categories,
+.recipe-card__likes,
+.history__button,
+.filter-form,
+.recipe-modal,
+.create-form,
+.collection__subtitle,
+.collection__action {
+  font-family: var(--font-main-text);
+}

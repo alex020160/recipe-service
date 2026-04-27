@@ -1,0 +1,22 @@
+:root {
+  --color-board: #f8edad;
+
+  --color-accent: #d98248;
+
+  --color-topbar: #352f2f;
+
+  --color-white: #ffffff;
+  --color-black: #000000;
+  --color-text: #111111;
+  --color-shadow: rgb(0 0 0 / 28%);
+  --color-modal-backdrop: rgb(0 0 0 / 55%);
+
+  --font-main-text: "MainTextFont", "Courier New", monospace;
+  --font-title-text: "TitleTextFont", "Courier New", serif;
+  --font-title: "TitleFont", "Georgia", serif;
+
+  --sidebar-width: 475px;
+  --page-min-width: 1440px;
+
+  --transition-main: 0.2s ease;
+}
