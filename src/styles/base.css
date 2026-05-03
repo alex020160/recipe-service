@@ -4,16 +4,18 @@
   box-sizing: border-box;
 }
 
-html {
-  min-width: var(--page-min-width);
-  min-height: 100%;
+html,
+#root,
+body {
+  width: 100%;
+  height: 100%;
 }
 
 body {
   min-width: var(--page-min-width);
   min-height: 100vh;
   margin: 0;
-  overflow-x: auto;
+  overflow: hidden;
   font-family: var(--font-main-text);
   color: var(--color-text);
   background-color: var(--color-white);

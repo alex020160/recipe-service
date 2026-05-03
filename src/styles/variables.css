@@ -12,11 +12,18 @@
   --color-modal-backdrop: rgb(0 0 0 / 55%);
 
   --font-main-text: "MainTextFont", "Courier New", monospace;
-  --font-title-text: "TitleTextFont", "Courier New", serif;
+  --font-title-text: "TitleTextFont", "Courier New", monospace;
   --font-title: "TitleFont", "Georgia", serif;
 
-  --sidebar-width: 475px;
   --page-min-width: 1440px;
 
   --transition-main: 0.2s ease;
+  --sidebar-width: 475px;
+  --search-width: 575px;
+  --search-height: 35px;
+  --recipe-card-width: 427px;
+  --recipe-card-height: 140px;
+  --recipe-card-image-height: 80px;
+  --history-width: 265px;
+  --history-height: 692px;
 }
