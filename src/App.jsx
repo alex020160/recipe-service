@@ -87,24 +87,37 @@ const recipes = [
   },
 ];
 
-const POPULAR_PAGE_SIZE = 3;
+const DEFAULT_POPULAR_PAGE_SIZE = 3;
+const TABLET_POPULAR_PAGE_SIZE = 4;
 const COLLECTION_PAGE_SIZE = 4;
+
+const getPopularPageSize = () => {
+  if (typeof window === "undefined") return DEFAULT_POPULAR_PAGE_SIZE;
+
+  return window.matchMedia("(min-width: 768px) and (max-width: 1024px)").matches
+    ? TABLET_POPULAR_PAGE_SIZE
+    : DEFAULT_POPULAR_PAGE_SIZE;
+};
 
 function App() {
   const [activeModal, setActiveModal] = useState(null);
   const [selectedRecipe, setSelectedRecipe] = useState(null);
   const [previewPhoto, setPreviewPhoto] = useState(null);
   const [popularPage, setPopularPage] = useState(0);
+  const [popularPageSize, setPopularPageSize] = useState(getPopularPageSize);
   const [historyRecipes, setHistoryRecipes] = useState([]);
+  const [isDarkTheme, setIsDarkTheme] = useState(() => {
+    return localStorage.getItem("recipeTheme") === "dark";
+  });
 
-  const popularStartIndex = popularPage * POPULAR_PAGE_SIZE;
+  const popularStartIndex = popularPage * popularPageSize;
   const visiblePopularRecipes = recipes.slice(
     popularStartIndex,
-    popularStartIndex + POPULAR_PAGE_SIZE,
+    popularStartIndex + popularPageSize,
   );
 
   const hasNextPopularRecipes =
-    popularStartIndex + POPULAR_PAGE_SIZE < recipes.length;
+    popularStartIndex + popularPageSize < recipes.length;
 
   const hasPrevPopularRecipes = popularPage > 0;
 
@@ -113,6 +126,30 @@ function App() {
       setPopularPage((currentPage) => currentPage + 1);
     }
   };
+
+  useEffect(() => {
+    const tabletMediaQuery = window.matchMedia(
+      "(min-width: 768px) and (max-width: 1024px)",
+    );
+
+    const updatePopularPageSize = () => {
+      setPopularPageSize(
+        tabletMediaQuery.matches
+          ? TABLET_POPULAR_PAGE_SIZE
+          : DEFAULT_POPULAR_PAGE_SIZE,
+      );
+
+      setPopularPage(0);
+    };
+
+    updatePopularPageSize();
+
+    tabletMediaQuery.addEventListener("change", updatePopularPageSize);
+
+    return () => {
+      tabletMediaQuery.removeEventListener("change", updatePopularPageSize);
+    };
+  }, []);
 
   const showPrevPopularRecipes = () => {
     if (hasPrevPopularRecipes) {
@@ -147,6 +184,10 @@ function App() {
   };
 
   useEffect(() => {
+    localStorage.setItem("recipeTheme", isDarkTheme ? "dark" : "light");
+  }, [isDarkTheme]);
+
+  useEffect(() => {
     const handleEscKey = (event) => {
       if (event.key !== "Escape") return;
 
@@ -168,7 +209,7 @@ function App() {
   }, [activeModal, previewPhoto]);
 
   return (
-    <div className="page">
+    <div className={`page ${isDarkTheme ? "page--dark" : ""}`}>
       <aside className="sidebar">
         <div className="sidebar__overlay">
           <h1 className="sidebar__title">
@@ -246,6 +287,17 @@ function App() {
                 alt=""
                 aria-hidden="true"
               />
+            </button>
+
+            <button
+              className="search__theme-toggle"
+              type="button"
+              aria-label={
+                isDarkTheme ? "Switch to light theme" : "Switch to dark theme"
+              }
+              onClick={() => setIsDarkTheme((currentValue) => !currentValue)}
+            >
+              {isDarkTheme ? "☀" : "☾"}
             </button>
           </form>
         </section>

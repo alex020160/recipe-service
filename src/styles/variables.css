@@ -27,3 +27,24 @@
   --history-width: 265px;
   --history-height: 692px;
 }
+
+.page--dark {
+  --surface-page: #13100f;
+  --surface-board: #26211d;
+  --surface-card: #2e2824;
+  --surface-card-light: #f7f0e4;
+  --surface-modal: #1f1b18;
+  --surface-input: #f7f0e4;
+
+  --text-main: #f5efe8;
+  --text-dark: #111111;
+  --text-muted: #cbb9a7;
+  --text-inverse: #ffffff;
+
+  --border-main: #e8d7c8;
+  --shadow-main: rgb(0 0 0 / 65%);
+  --backdrop-main: rgb(0 0 0 / 72%);
+
+  --dark-topbar: #171311;
+  --dark-board-shadow: rgb(0 0 0 / 55%);
+}
