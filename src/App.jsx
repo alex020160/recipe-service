@@ -567,7 +567,19 @@ function FilterModal({ onClose }) {
 }
 
 function RecipeModal({ recipe, onClose, onOpenPhoto }) {
+  const [areCookingPhotosExpanded, setAreCookingPhotosExpanded] =
+    useState(false);
   if (!recipe) return null;
+
+  const cookingPhotos =
+    recipe.photos?.filter(Boolean).slice(0, 6) ??
+    Array.from({ length: 6 }, () => defaultRecipeImage);
+
+  const visibleCookingPhotos = areCookingPhotosExpanded
+    ? cookingPhotos
+    : cookingPhotos.slice(0, 2);
+
+  const hasHiddenCookingPhotos = cookingPhotos.length > 2;
 
   return (
     <section className="modal modal--recipe" role="dialog" aria-modal="true">
@@ -658,19 +670,43 @@ function RecipeModal({ recipe, onClose, onOpenPhoto }) {
         <div className="recipe-modal__photos">
           <h3 className="recipe-modal__subtitle">COOKING PHOTOS:</h3>
 
-          <img
-            className="recipe-modal__photo"
-            src={defaultRecipeImage}
-            alt="Cooking step 1"
-            onClick={() => onOpenPhoto(defaultRecipeImage)}
-          />
+          <div className="recipe-modal__photo-list">
+            {visibleCookingPhotos.map((photo, index) => (
+              <img
+                className="recipe-modal__photo"
+                src={photo}
+                alt={`Cooking step ${index + 1}`}
+                key={`${photo}-${index}`}
+                onClick={() => onOpenPhoto(photo)}
+              />
+            ))}
+          </div>
 
-          <img
-            className="recipe-modal__photo"
-            src={defaultRecipeImage}
-            alt="Cooking step 2"
-            onClick={() => onOpenPhoto(defaultRecipeImage)}
-          />
+          {hasHiddenCookingPhotos && (
+            <button
+              className={`recipe-modal__photos-toggle ${
+                areCookingPhotosExpanded
+                  ? "recipe-modal__photos-toggle--open"
+                  : ""
+              }`}
+              type="button"
+              aria-label={
+                areCookingPhotosExpanded
+                  ? "Hide cooking photos"
+                  : "Show more cooking photos"
+              }
+              onClick={() =>
+                setAreCookingPhotosExpanded((currentValue) => !currentValue)
+              }
+            >
+              <img
+                className="recipe-modal__photos-toggle-icon"
+                src={arrowRightIcon}
+                alt=""
+                aria-hidden="true"
+              />
+            </button>
+          )}
         </div>
       </div>
     </section>
