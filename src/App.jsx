@@ -17,7 +17,7 @@ import {
 
 import defaultRecipeImage from "./assets/images/defaultRecipeImage.svg";
 
-const categories = [
+const createCategories = [
   "breakfast",
   "lunch",
   "supper",
@@ -27,8 +27,21 @@ const categories = [
   "drinks",
   "dessert",
   "main dish",
-  "popular",
   "seafood",
+];
+
+const filterCategories = [
+  "breakfast",
+  "lunch",
+  "supper",
+  "snack",
+  "soup",
+  "salads",
+  "drinks",
+  "dessert",
+  "main dish",
+  "seafood",
+  "popular",
 ];
 
 const recipes = [
@@ -458,7 +471,7 @@ function FilterModal({ onClose }) {
           <legend className="filter-form__legend">Categories:</legend>
 
           <div className="filter-form__categories">
-            {categories.map((category) => (
+            {filterCategories.map((category) => (
               <label className="filter-form__checkbox" key={category}>
                 <input
                   className="filter-form__checkbox-input"
@@ -665,6 +678,72 @@ function RecipeModal({ recipe, onClose, onOpenPhoto }) {
 }
 
 function CreateRecipeModal({ onClose }) {
+  const [avatarPreview, setAvatarPreview] = useState(defaultRecipeImage);
+  const [cookingPhotos, setCookingPhotos] = useState(Array(6).fill(null));
+  const [activePhotoIndex, setActivePhotoIndex] = useState(null);
+
+  const avatarInputRef = useRef(null);
+  const photosInputRef = useRef(null);
+
+  const openAvatarFileDialog = () => {
+    avatarInputRef.current?.click();
+  };
+
+  const handleAvatarChange = (event) => {
+    const file = event.target.files[0];
+
+    if (!file) return;
+
+    const temporaryImageUrl = URL.createObjectURL(file);
+    const image = new Image();
+
+    image.onload = () => {
+      const isValidAvatarSize =
+        image.naturalWidth >= 427 && image.naturalHeight >= 80;
+
+      if (!isValidAvatarSize) {
+        URL.revokeObjectURL(temporaryImageUrl);
+        event.target.value = "";
+        alert("Avatar image must be at least 427px wide and 80px high.");
+        return;
+      }
+
+      setAvatarPreview(temporaryImageUrl);
+    };
+
+    image.onerror = () => {
+      URL.revokeObjectURL(temporaryImageUrl);
+      event.target.value = "";
+      alert("Could not load this image.");
+    };
+
+    image.src = temporaryImageUrl;
+  };
+
+  const openPhotoFileDialog = (index = null) => {
+    const firstEmptyIndex = cookingPhotos.findIndex((photo) => photo === null);
+    const targetIndex = index ?? (firstEmptyIndex === -1 ? 0 : firstEmptyIndex);
+
+    setActivePhotoIndex(targetIndex);
+    photosInputRef.current?.click();
+  };
+
+  const handleCookingPhotoChange = (event) => {
+    const file = event.target.files[0];
+
+    if (!file || activePhotoIndex === null) return;
+
+    const temporaryImageUrl = URL.createObjectURL(file);
+
+    setCookingPhotos((currentPhotos) =>
+      currentPhotos.map((photo, index) =>
+        index === activePhotoIndex ? temporaryImageUrl : photo,
+      ),
+    );
+
+    event.target.value = "";
+  };
+
   return (
     <section className="modal modal--create" role="dialog" aria-modal="true">
       <button className="modal__close" type="button" onClick={onClose}>
@@ -681,10 +760,12 @@ function CreateRecipeModal({ onClose }) {
         onSubmit={(event) => event.preventDefault()}
       >
         <div className="create-form__header">
-          <label className="create-form__name">
-            Name your recipe:
+          <span className="create-form__name">Name your recipe:</span>
+
+          <label className="create-form__name-field" htmlFor="recipe-name">
             <input
               className="create-form__name-input"
+              id="recipe-name"
               type="text"
               name="recipeName"
               required
@@ -722,16 +803,34 @@ function CreateRecipeModal({ onClose }) {
         </div>
 
         <div className="create-form__avatar">
-          <div className="create-form__avatar-preview">
-            <img
-              className="create-form__avatar-icon"
-              src={defaultRecipeImage}
-              alt=""
-              aria-hidden="true"
-            />
-          </div>
+          <input
+            ref={avatarInputRef}
+            className="create-form__file"
+            id="recipe-avatar"
+            type="file"
+            name="avatar"
+            accept="image/*"
+            onChange={handleAvatarChange}
+          />
 
-          <label className="create-form__avatar-label">
+          <button
+            className="create-form__avatar-preview"
+            type="button"
+            aria-label="Change recipe avatar"
+            onClick={openAvatarFileDialog}
+          >
+            <img
+              className="create-form__avatar-image"
+              src={avatarPreview}
+              alt="Recipe avatar preview"
+            />
+          </button>
+
+          <button
+            className="create-form__avatar-label"
+            type="button"
+            onClick={openAvatarFileDialog}
+          >
             <span>Change recipe avatar</span>
             <img
               className="create-form__edit-icon"
@@ -739,13 +838,7 @@ function CreateRecipeModal({ onClose }) {
               alt=""
               aria-hidden="true"
             />
-            <input
-              className="create-form__file"
-              type="file"
-              name="avatar"
-              accept="image/*"
-            />
-          </label>
+          </button>
         </div>
 
         <fieldset className="create-form__categories">
@@ -753,7 +846,7 @@ function CreateRecipeModal({ onClose }) {
             Add categories:
           </legend>
 
-          {categories.map((category) => (
+          {createCategories.map((category) => (
             <label className="create-form__category" key={category}>
               <input type="checkbox" name="categories" value={category} />
               <span>{category}</span>
@@ -768,25 +861,46 @@ function CreateRecipeModal({ onClose }) {
             steps/other photos
           </p>
 
-          <label className="create-form__add-photo">
+          <input
+            ref={photosInputRef}
+            className="create-form__file"
+            type="file"
+            name="photos"
+            accept="image/*"
+            onChange={handleCookingPhotoChange}
+          />
+
+          <button
+            className="create-form__add-photo"
+            type="button"
+            aria-label="Add cooking photo"
+            onClick={() => openPhotoFileDialog()}
+          >
             <img
               className="create-form__add-photo-icon"
               src={plusIcon}
               alt=""
               aria-hidden="true"
             />
-            <input
-              className="create-form__file"
-              type="file"
-              name="photos"
-              accept="image/*"
-              multiple
-            />
-          </label>
+          </button>
 
           <div className="create-form__photo-grid">
-            {Array.from({ length: 6 }).map((_, index) => (
-              <div className="create-form__photo-cell" key={index}></div>
+            {cookingPhotos.map((photo, index) => (
+              <button
+                className="create-form__photo-cell"
+                type="button"
+                key={index}
+                aria-label={`Add or change cooking photo ${index + 1}`}
+                onClick={() => openPhotoFileDialog(index)}
+              >
+                {photo && (
+                  <img
+                    className="create-form__photo-image"
+                    src={photo}
+                    alt={`Cooking photo ${index + 1}`}
+                  />
+                )}
+              </button>
             ))}
           </div>
         </div>
