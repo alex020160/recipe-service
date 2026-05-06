@@ -107,7 +107,13 @@ function App() {
   const [popularPageSize, setPopularPageSize] = useState(getPopularPageSize);
   const [historyRecipes, setHistoryRecipes] = useState([]);
   const [isDarkTheme, setIsDarkTheme] = useState(() => {
-    return localStorage.getItem("recipeTheme") === "dark";
+    const savedTheme = localStorage.getItem("recipeTheme");
+
+    if (savedTheme) {
+      return savedTheme === "dark";
+    }
+
+    return window.matchMedia("(prefers-color-scheme: dark)").matches;
   });
 
   const popularStartIndex = popularPage * popularPageSize;
@@ -1102,12 +1108,14 @@ function RecipeCollectionModal({
                 <RecipeCard recipe={recipe} onOpen={() => onOpen(recipe)} />
 
                 <button className="collection__action" type="button">
-                  <img
-                    className="collection__action-icon"
-                    src={bagIcon}
-                    alt=""
-                    aria-hidden="true"
-                  />
+                  <span className="collection__action-icon-wrap">
+                    <img
+                      className="collection__action-icon"
+                      src={bagIcon}
+                      alt=""
+                      aria-hidden="true"
+                    />
+                  </span>
                   {actionLabel}
                 </button>
               </div>
