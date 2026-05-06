@@ -461,12 +461,18 @@ body {
   overflow: hidden;
 
   background-color: transparent;
-  background-image: url("../assets/images/history-bg.png");
+  background-image:
+    linear-gradient(
+      to bottom,
+      rgb(0 0 0 / 38%) 0%,
+      rgb(0 0 0 / 18%) 28%,
+      rgb(0 0 0 / 10%) 58%,
+      rgb(0 0 0 / 32%) 100%
+    ),
+    url("../assets/images/history-bg-new.png");
   background-repeat: no-repeat;
   background-position: center top;
   background-size: cover;
-
-  box-shadow: none;
 
   --history-content-width: 235px;
   --history-content-shift: 26px;
@@ -2117,8 +2123,7 @@ button:focus {
     position: relative;
     flex: 0 0 auto;
 
-    width: 100%;
-    max-width: 675px;
+    width: min(675px, calc(100vw - 96px));
     height: 445px;
     min-height: 445px;
     max-height: none;
@@ -2128,11 +2133,7 @@ button:focus {
 
     overflow: hidden;
 
-    background-image: url("../assets/images/history-bg.png");
-    background-repeat: no-repeat;
-
-    background-size: 118% auto;
-    background-position: 58% center;
+    background: transparent;
 
     box-shadow:
       0 -18px 24px rgb(128 117 94 / 48%),
@@ -2142,21 +2143,28 @@ button:focus {
   .history::before {
     content: "";
     position: absolute;
-    top: 0;
-    left: calc(50% - 42px);
-
-    width: calc(100% + 140px);
-    height: 100%;
-
-    transform: translateX(-50%);
+    inset: 0;
 
     z-index: 0;
     pointer-events: none;
 
-    background-image: url("../assets/images/history-bg.png");
+    background-image:
+      linear-gradient(
+        to bottom,
+        rgb(0 0 0 / 38%) 0%,
+        rgb(0 0 0 / 18%) 28%,
+        rgb(0 0 0 / 10%) 58%,
+        rgb(0 0 0 / 32%) 100%
+      ),
+      url("../assets/images/history-bg-new.png");
+
     background-repeat: no-repeat;
-    background-size: cover;
-    background-position: center center;
+    background-size:
+      100% 100%,
+      cover;
+    background-position:
+      center center,
+      50% center;
   }
 
   .history::after {
