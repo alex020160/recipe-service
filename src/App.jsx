@@ -15,73 +15,25 @@ import {
   createButtonIcon,
 } from "./assets/icons";
 
+import {
+  recipeCategories,
+  filterSortOptions,
+} from "./constants/recipeCategories";
+
 import defaultRecipeImage from "./assets/images/defaultRecipeImage.svg";
 
-const recipeCategories = [
-  "Beef",
-  "Breakfast",
-  "Chicken",
-  "Dessert",
-  "Goat",
-  "Lamb",
-  "Miscellaneous",
-  "Pasta",
-  "Pork",
-  "Seafood",
-  "Side",
-  "Starter",
-  "Vegan",
-  "Vegetarian",
-];
+import { getRecipeTimeMinutes, splitRecipeText } from "./utils/normalizeRecipe";
 
-const filterSortOptions = ["popular"];
+import {
+  getStoredFavoriteRecipeIds,
+  getStoredMyRecipeIds,
+  getStoredRecipes,
+  saveStoredFavoriteRecipeIds,
+  saveStoredMyRecipeIds,
+  saveStoredRecipes,
+} from "./services/recipeStorage";
 
-/*const recipes = [
-  {
-    id: 1,
-    title: "Test recipe",
-    time: "1h30min",
-    likes: 100,
-    categories: ["main dish", "popular"],
-    image: "",
-  },
-  {
-    id: 2,
-    title: "Test recipe",
-    time: "1h",
-    likes: 10,
-    categories: ["main dish", "popular"],
-    image: "",
-  },
-  {
-    id: 3,
-    title: "Test recipe",
-    time: "1h",
-    likes: 1000,
-    categories: ["main dish", "popular"],
-    image: "",
-  },
-  {
-    id: 4,
-    title: "Test recipe",
-    time: "30min",
-    likes: 1176,
-    categories: ["main dish", "popular"],
-    image: "",
-  },
-  {
-    id: 5,
-    title: "Test recipe",
-    time: "30min",
-    likes: 1176,
-    categories: ["main dish", "popular"],
-    image: "",
-  },
-];*/
-
-const [recipes, setRecipes] = useState([]);
-const [favoriteRecipeIds, setFavoriteRecipeIds] = useState([]);
-const [myRecipeIds, setMyRecipeIds] = useState([]);
+import { getRecipesByCategory } from "./services/recipeApi";
 
 const DEFAULT_POPULAR_PAGE_SIZE = 3;
 const TABLET_POPULAR_PAGE_SIZE = 4;
@@ -95,16 +47,6 @@ const getPopularPageSize = () => {
     : DEFAULT_POPULAR_PAGE_SIZE;
 };
 
-const getRecipeTimeMinutes = (time) => {
-  const hoursMatch = time.match(/(\d+)\s*h/);
-  const minutesMatch = time.match(/(\d+)\s*min/);
-
-  const hours = hoursMatch ? Number(hoursMatch[1]) : 0;
-  const minutes = minutesMatch ? Number(minutesMatch[1]) : 0;
-
-  return hours * 60 + minutes;
-};
-
 function App() {
   const [activeModal, setActiveModal] = useState(null);
   const [selectedRecipe, setSelectedRecipe] = useState(null);
@@ -112,6 +54,13 @@ function App() {
   const [popularPage, setPopularPage] = useState(0);
   const [popularPageSize, setPopularPageSize] = useState(getPopularPageSize);
   const [historyRecipes, setHistoryRecipes] = useState([]);
+  const [recipes, setRecipes] = useState(() => getStoredRecipes());
+  const [isRecipesLoading, setIsRecipesLoading] = useState(false);
+  const [recipesLoadingError, setRecipesLoadingError] = useState("");
+  const [favoriteRecipeIds, setFavoriteRecipeIds] = useState(() =>
+    getStoredFavoriteRecipeIds(),
+  );
+  const [myRecipeIds, setMyRecipeIds] = useState(() => getStoredMyRecipeIds());
   const [activeFilters, setActiveFilters] = useState({
     categories: [],
     isPopularSortEnabled: false,
@@ -132,9 +81,11 @@ function App() {
     .filter((recipe) => {
       const hasSelectedCategories = activeFilters.categories.length > 0;
 
+      const currentRecipeCategories = recipe.categories || [];
+
       const matchesCategory =
         !hasSelectedCategories ||
-        recipe.categories.some((category) =>
+        currentRecipeCategories.some((category) =>
           activeFilters.categories.includes(category),
         );
 
@@ -156,6 +107,11 @@ function App() {
     (firstRecipe, secondRecipe) => secondRecipe.likes - firstRecipe.likes,
   );
 
+  const applyFilters = (nextFilters) => {
+    setActiveFilters(nextFilters);
+    setPopularPage(0);
+  };
+
   const popularStartIndex = popularPage * popularPageSize;
 
   const visiblePopularRecipes = popularRecipes.slice(
@@ -173,6 +129,18 @@ function App() {
       setPopularPage((currentPage) => currentPage + 1);
     }
   };
+
+  useEffect(() => {
+    saveStoredRecipes(recipes);
+  }, [recipes]);
+
+  useEffect(() => {
+    saveStoredFavoriteRecipeIds(favoriteRecipeIds);
+  }, [favoriteRecipeIds]);
+
+  useEffect(() => {
+    saveStoredMyRecipeIds(myRecipeIds);
+  }, [myRecipeIds]);
 
   useEffect(() => {
     const tabletMediaQuery = window.matchMedia(
@@ -233,6 +201,44 @@ function App() {
   useEffect(() => {
     localStorage.setItem("recipeTheme", isDarkTheme ? "dark" : "light");
   }, [isDarkTheme]);
+
+  useEffect(() => {
+    const loadInitialRecipes = async () => {
+      if (recipes.length > 0) return;
+
+      try {
+        setIsRecipesLoading(true);
+        setRecipesLoadingError("");
+
+        const categoriesToLoad = [
+          "Chicken",
+          "Dessert",
+          "Pasta",
+          "Seafood",
+          "Vegetarian",
+        ];
+
+        const recipesByCategories = await Promise.all(
+          categoriesToLoad.map((category) => getRecipesByCategory(category)),
+        );
+
+        const loadedRecipes = recipesByCategories
+          .map((categoryRecipes) =>
+            categoryRecipes.filter((recipe) => recipe.image).slice(0, 4),
+          )
+          .flat();
+
+        setRecipes(loadedRecipes);
+      } catch (error) {
+        console.error(error);
+        setRecipesLoadingError("Failed to load recipes");
+      } finally {
+        setIsRecipesLoading(false);
+      }
+    };
+
+    loadInitialRecipes();
+  }, [recipes.length]);
 
   useEffect(() => {
     const handleEscKey = (event) => {
@@ -356,17 +362,29 @@ function App() {
 
               <div className="popular__content">
                 <div className="popular__list">
-                  {visiblePopularRecipes.length > 0 ? (
+                  {isRecipesLoading && (
+                    <p className="popular__empty">Loading recipes...</p>
+                  )}
+
+                  {!isRecipesLoading && recipesLoadingError && (
+                    <p className="popular__empty">{recipesLoadingError}</p>
+                  )}
+
+                  {!isRecipesLoading &&
+                    !recipesLoadingError &&
+                    visiblePopularRecipes.length === 0 && (
+                      <p className="popular__empty">No recipes found</p>
+                    )}
+
+                  {!isRecipesLoading &&
+                    !recipesLoadingError &&
                     visiblePopularRecipes.map((recipe) => (
                       <RecipeCard
                         key={recipe.id}
                         recipe={recipe}
                         onOpen={() => openRecipe(recipe)}
                       />
-                    ))
-                  ) : (
-                    <p className="popular__empty">No recipes yet</p>
-                  )}
+                    ))}
                 </div>
 
                 <div className="popular__controls">
@@ -417,7 +435,7 @@ function App() {
           {activeModal === "filter" && (
             <FilterModal
               activeFilters={activeFilters}
-              onApplyFilters={setActiveFilters}
+              onApplyFilters={applyFilters}
               onClose={closeModal}
             />
           )}
@@ -439,7 +457,9 @@ function App() {
               title="FAVORITES"
               subtitle="all recipes that you like!"
               actionLabel="UNLIKE"
-              recipes={recipes}
+              recipes={recipes.filter((recipe) =>
+                favoriteRecipeIds.includes(recipe.id),
+              )}
               onClose={closeModal}
               onOpen={openRecipe}
             />
@@ -450,7 +470,9 @@ function App() {
               title="YOUR RECIPES"
               subtitle="all recipes that you had created"
               actionLabel="DELETE"
-              recipes={recipes}
+              recipes={recipes.filter((recipe) =>
+                myRecipeIds.includes(recipe.id),
+              )}
               onClose={closeModal}
               onOpen={openRecipe}
             />
@@ -510,7 +532,7 @@ function RecipeCard({ recipe, onOpen }) {
           </div>
 
           <ul className="recipe-card__categories">
-            {recipe.categories.map((category, index) => (
+            {(recipe.categories || []).map((category, index) => (
               <li className="recipe-card__category" key={index}>
                 {category}
               </li>
@@ -599,7 +621,7 @@ function FilterModal({ activeFilters, onApplyFilters, onClose }) {
           <legend className="filter-form__legend">Categories:</legend>
 
           <div className="filter-form__categories">
-            {filterCategories.map((category) => (
+            {recipeCategories.map((category) => (
               <label className="filter-form__checkbox" key={category}>
                 <input
                   className="filter-form__checkbox-input"
@@ -613,9 +635,9 @@ function FilterModal({ activeFilters, onApplyFilters, onClose }) {
             ))}
           </div>
 
-          <legend className="filter-form__legend">Sort:</legend>
+          <p className="filter-form__legend filter-form__sort-title">Sort:</p>
 
-          <div className="filter-form__categories">
+          <div className="filter-form__categories filter-form__sort">
             {filterSortOptions.map((sortOption) => (
               <label className="filter-form__checkbox" key={sortOption}>
                 <input
@@ -725,9 +747,12 @@ function RecipeModal({ recipe, onClose, onOpenPhoto }) {
     useState(false);
   if (!recipe) return null;
 
+  const recipePhotos = recipe.photos?.filter(Boolean).slice(0, 6) || [];
+
   const cookingPhotos =
-    recipe.photos?.filter(Boolean).slice(0, 6) ??
-    Array.from({ length: 6 }, () => defaultRecipeImage);
+    recipePhotos.length > 0
+      ? recipePhotos
+      : Array.from({ length: 6 }, () => defaultRecipeImage);
 
   const visibleCookingPhotos = areCookingPhotosExpanded
     ? cookingPhotos
@@ -754,7 +779,7 @@ function RecipeModal({ recipe, onClose, onOpenPhoto }) {
 
           <img
             className="recipe-modal__image"
-            src="/src/assets/images/detail-recipe.jpg"
+            src={recipe.image || defaultRecipeImage}
             alt={recipe.title}
           />
         </div>
@@ -789,10 +814,9 @@ function RecipeModal({ recipe, onClose, onOpenPhoto }) {
             <h3 className="recipe-modal__subtitle">Ingredients:</h3>
 
             <ul className="recipe-modal__list">
-              <li>bolognese sauce</li>
-              <li>pasta</li>
-              <li>vegetables</li>
-              <li>tomatos</li>
+              {splitRecipeText(recipe.ingredients).map((ingredient, index) => (
+                <li key={index}>{ingredient}</li>
+              ))}
             </ul>
           </div>
         </div>
@@ -801,9 +825,9 @@ function RecipeModal({ recipe, onClose, onOpenPhoto }) {
           <h3 className="recipe-modal__subtitle">Categories:</h3>
 
           <ul className="recipe-modal__list">
-            <li>Main dish</li>
-            <li>Dinner</li>
-            <li>Popular</li>
+            {(recipe.categories || []).map((category, index) => (
+              <li key={index}>{category}</li>
+            ))}
           </ul>
         </div>
 
@@ -812,11 +836,9 @@ function RecipeModal({ recipe, onClose, onOpenPhoto }) {
             <h3 className="recipe-modal__subtitle">STEPS:</h3>
 
             <ol className="recipe-modal__steps-list">
-              <li>Prepare all ingredients.</li>
-              <li>Boil pasta until ready.</li>
-              <li>Cook sauce and vegetables.</li>
-              <li>Mix ingredients together.</li>
-              <li>Serve the dish.</li>
+              {splitRecipeText(recipe.steps).map((step, index) => (
+                <li key={index}>{step}</li>
+              ))}
             </ol>
           </div>
         </div>

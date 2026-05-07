@@ -1,20 +1,38 @@
 const RECIPES_STORAGE_KEY = "recipes";
-const FAVORITES_STORAGE_KEY = "favoriteRecipeIds";
+const FAVORITE_RECIPE_IDS_STORAGE_KEY = "favoriteRecipeIds";
+const MY_RECIPE_IDS_STORAGE_KEY = "myRecipeIds";
+
+const parseStoredValue = (value, fallbackValue) => {
+  try {
+    return value ? JSON.parse(value) : fallbackValue;
+  } catch {
+    return fallbackValue;
+  }
+};
 
 export const getStoredRecipes = () => {
-  const storedRecipes = localStorage.getItem(RECIPES_STORAGE_KEY);
-  return storedRecipes ? JSON.parse(storedRecipes) : [];
+  return parseStoredValue(localStorage.getItem(RECIPES_STORAGE_KEY), []);
 };
 
 export const saveStoredRecipes = (recipes) => {
   localStorage.setItem(RECIPES_STORAGE_KEY, JSON.stringify(recipes));
 };
 
-export const getStoredFavoriteIds = () => {
-  const storedIds = localStorage.getItem(FAVORITES_STORAGE_KEY);
-  return storedIds ? JSON.parse(storedIds) : [];
+export const getStoredFavoriteRecipeIds = () => {
+  return parseStoredValue(
+    localStorage.getItem(FAVORITE_RECIPE_IDS_STORAGE_KEY),
+    [],
+  );
 };
 
-export const saveStoredFavoriteIds = (ids) => {
-  localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(ids));
+export const saveStoredFavoriteRecipeIds = (ids) => {
+  localStorage.setItem(FAVORITE_RECIPE_IDS_STORAGE_KEY, JSON.stringify(ids));
+};
+
+export const getStoredMyRecipeIds = () => {
+  return parseStoredValue(localStorage.getItem(MY_RECIPE_IDS_STORAGE_KEY), []);
+};
+
+export const saveStoredMyRecipeIds = (ids) => {
+  localStorage.setItem(MY_RECIPE_IDS_STORAGE_KEY, JSON.stringify(ids));
 };
