@@ -17,34 +17,26 @@ import {
 
 import defaultRecipeImage from "./assets/images/defaultRecipeImage.svg";
 
-const createCategories = [
-  "breakfast",
-  "lunch",
-  "supper",
-  "snack",
-  "soup",
-  "salads",
-  "drinks",
-  "dessert",
-  "main dish",
-  "seafood",
+const recipeCategories = [
+  "Beef",
+  "Breakfast",
+  "Chicken",
+  "Dessert",
+  "Goat",
+  "Lamb",
+  "Miscellaneous",
+  "Pasta",
+  "Pork",
+  "Seafood",
+  "Side",
+  "Starter",
+  "Vegan",
+  "Vegetarian",
 ];
 
-const filterCategories = [
-  "breakfast",
-  "lunch",
-  "supper",
-  "snack",
-  "soup",
-  "salads",
-  "drinks",
-  "dessert",
-  "main dish",
-  "seafood",
-  "popular",
-];
+const filterSortOptions = ["popular"];
 
-const recipes = [
+/*const recipes = [
   {
     id: 1,
     title: "Test recipe",
@@ -85,7 +77,11 @@ const recipes = [
     categories: ["main dish", "popular"],
     image: "",
   },
-];
+];*/
+
+const [recipes, setRecipes] = useState([]);
+const [favoriteRecipeIds, setFavoriteRecipeIds] = useState([]);
+const [myRecipeIds, setMyRecipeIds] = useState([]);
 
 const DEFAULT_POPULAR_PAGE_SIZE = 3;
 const TABLET_POPULAR_PAGE_SIZE = 4;
@@ -99,6 +95,16 @@ const getPopularPageSize = () => {
     : DEFAULT_POPULAR_PAGE_SIZE;
 };
 
+const getRecipeTimeMinutes = (time) => {
+  const hoursMatch = time.match(/(\d+)\s*h/);
+  const minutesMatch = time.match(/(\d+)\s*min/);
+
+  const hours = hoursMatch ? Number(hoursMatch[1]) : 0;
+  const minutes = minutesMatch ? Number(minutesMatch[1]) : 0;
+
+  return hours * 60 + minutes;
+};
+
 function App() {
   const [activeModal, setActiveModal] = useState(null);
   const [selectedRecipe, setSelectedRecipe] = useState(null);
@@ -106,6 +112,12 @@ function App() {
   const [popularPage, setPopularPage] = useState(0);
   const [popularPageSize, setPopularPageSize] = useState(getPopularPageSize);
   const [historyRecipes, setHistoryRecipes] = useState([]);
+  const [activeFilters, setActiveFilters] = useState({
+    categories: [],
+    isPopularSortEnabled: false,
+    minTimeMinutes: 0,
+    maxTimeMinutes: Infinity,
+  });
   const [isDarkTheme, setIsDarkTheme] = useState(() => {
     const savedTheme = localStorage.getItem("recipeTheme");
 
@@ -116,14 +128,43 @@ function App() {
     return window.matchMedia("(prefers-color-scheme: dark)").matches;
   });
 
+  const filteredRecipes = recipes
+    .filter((recipe) => {
+      const hasSelectedCategories = activeFilters.categories.length > 0;
+
+      const matchesCategory =
+        !hasSelectedCategories ||
+        recipe.categories.some((category) =>
+          activeFilters.categories.includes(category),
+        );
+
+      const recipeTimeMinutes = getRecipeTimeMinutes(recipe.time);
+
+      const matchesTime =
+        recipeTimeMinutes >= activeFilters.minTimeMinutes &&
+        recipeTimeMinutes <= activeFilters.maxTimeMinutes;
+
+      return matchesCategory && matchesTime;
+    })
+    .sort((firstRecipe, secondRecipe) => {
+      if (!activeFilters.isPopularSortEnabled) return 0;
+
+      return secondRecipe.likes - firstRecipe.likes;
+    });
+
+  const popularRecipes = [...filteredRecipes].sort(
+    (firstRecipe, secondRecipe) => secondRecipe.likes - firstRecipe.likes,
+  );
+
   const popularStartIndex = popularPage * popularPageSize;
-  const visiblePopularRecipes = recipes.slice(
+
+  const visiblePopularRecipes = popularRecipes.slice(
     popularStartIndex,
     popularStartIndex + popularPageSize,
   );
 
   const hasNextPopularRecipes =
-    popularStartIndex + popularPageSize < recipes.length;
+    popularStartIndex + popularPageSize < popularRecipes.length;
 
   const hasPrevPopularRecipes = popularPage > 0;
 
@@ -373,7 +414,13 @@ function App() {
         <div className="modal-layer">
           <div className="modal-layer__backdrop" onClick={closeModal}></div>
 
-          {activeModal === "filter" && <FilterModal onClose={closeModal} />}
+          {activeModal === "filter" && (
+            <FilterModal
+              activeFilters={activeFilters}
+              onApplyFilters={setActiveFilters}
+              onClose={closeModal}
+            />
+          )}
 
           {activeModal === "recipe" && (
             <RecipeModal
@@ -507,7 +554,33 @@ function HistoryPanel({ recipes, onOpen }) {
   );
 }
 
-function FilterModal({ onClose }) {
+function FilterModal({ activeFilters, onApplyFilters, onClose }) {
+  const handleSubmit = (event) => {
+    event.preventDefault();
+
+    const formData = new FormData(event.currentTarget);
+
+    const selectedCategories = formData.getAll("categories");
+    const isPopularSortEnabled = formData.get("sort") === "popular";
+
+    const minHours = Number(formData.get("minHours") || 0);
+    const minMinutes = Number(formData.get("minMinutes") || 0);
+    const maxHours = Number(formData.get("maxHours") || 0);
+    const maxMinutes = Number(formData.get("maxMinutes") || 0);
+
+    const minTimeMinutes = minHours * 60 + minMinutes;
+    const maxTimeMinutes = maxHours * 60 + maxMinutes;
+
+    onApplyFilters({
+      categories: selectedCategories,
+      isPopularSortEnabled,
+      minTimeMinutes,
+      maxTimeMinutes,
+    });
+
+    onClose();
+  };
+
   return (
     <section className="modal modal--filter" role="dialog" aria-modal="true">
       <button className="modal__close" type="button" onClick={onClose}>
@@ -521,10 +594,7 @@ function FilterModal({ onClose }) {
 
       <h2 className="modal__title">What recipe do you want?</h2>
 
-      <form
-        className="filter-form"
-        onSubmit={(event) => event.preventDefault()}
-      >
+      <form className="filter-form" onSubmit={handleSubmit}>
         <fieldset className="filter-form__group">
           <legend className="filter-form__legend">Categories:</legend>
 
@@ -536,8 +606,26 @@ function FilterModal({ onClose }) {
                   type="checkbox"
                   name="categories"
                   value={category}
+                  defaultChecked={activeFilters.categories.includes(category)}
                 />
                 <span className="filter-form__checkbox-text">{category}</span>
+              </label>
+            ))}
+          </div>
+
+          <legend className="filter-form__legend">Sort:</legend>
+
+          <div className="filter-form__categories">
+            {filterSortOptions.map((sortOption) => (
+              <label className="filter-form__checkbox" key={sortOption}>
+                <input
+                  className="filter-form__checkbox-input"
+                  type="checkbox"
+                  name="sort"
+                  value={sortOption}
+                  defaultChecked={activeFilters.isPopularSortEnabled}
+                />
+                <span className="filter-form__checkbox-text">{sortOption}</span>
               </label>
             ))}
           </div>
@@ -557,7 +645,7 @@ function FilterModal({ onClose }) {
                 min="0"
                 max="24"
                 step="1"
-                defaultValue="0"
+                defaultValue={Math.floor(activeFilters.minTimeMinutes / 60)}
               />
               h
             </label>
@@ -568,9 +656,9 @@ function FilterModal({ onClose }) {
                 type="number"
                 name="minMinutes"
                 min="0"
-                max="60"
+                max="59"
                 step="1"
-                defaultValue="10"
+                defaultValue={activeFilters.minTimeMinutes % 60}
               />
               min
             </label>
@@ -587,7 +675,11 @@ function FilterModal({ onClose }) {
                 min="0"
                 max="24"
                 step="1"
-                defaultValue="2"
+                defaultValue={
+                  activeFilters.maxTimeMinutes === Infinity
+                    ? 2
+                    : Math.floor(activeFilters.maxTimeMinutes / 60)
+                }
               />
               h
             </label>
@@ -598,9 +690,13 @@ function FilterModal({ onClose }) {
                 type="number"
                 name="maxMinutes"
                 min="0"
-                max="60"
+                max="59"
                 step="1"
-                defaultValue="30"
+                defaultValue={
+                  activeFilters.maxTimeMinutes === Infinity
+                    ? 30
+                    : activeFilters.maxTimeMinutes % 60
+                }
               />
               min
             </label>
@@ -940,7 +1036,7 @@ function CreateRecipeModal({ onClose }) {
             Add categories:
           </legend>
 
-          {createCategories.map((category) => (
+          {recipeCategories.map((category) => (
             <label className="create-form__category" key={category}>
               <input type="checkbox" name="categories" value={category} />
               <span>{category}</span>
