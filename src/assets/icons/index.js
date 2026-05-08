@@ -5,7 +5,6 @@ import filterIcon from "./filter.svg";
 import heartIcon from "./heart.svg";
 import plusIcon from "./plus.svg";
 import searchIcon from "./search.svg";
-import tickIcon from "./tick-square.svg";
 import clockIcon from "./time-circle.svg";
 import arrowRightIcon from "./vector.svg";
 import buttonApplyIcon from "./button-apply.svg";
@@ -18,7 +17,6 @@ export {
   heartIcon,
   plusIcon,
   searchIcon,
-  tickIcon,
   clockIcon,
   arrowRightIcon,
   buttonApplyIcon,

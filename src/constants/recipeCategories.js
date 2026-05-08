@@ -14,5 +14,3 @@ export const recipeCategories = [
   "Vegan",
   "Vegetarian",
 ];
-
-export const filterSortOptions = ["popular"];

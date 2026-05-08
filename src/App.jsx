@@ -1,4 +1,9 @@
 import { useState, useRef, useEffect } from "react";
+import { uiText } from "./constants/uiText";
+import {
+  getLocalizedRecipeField,
+  translateRecipeToRussian,
+} from "./utils/translateRecipe";
 
 import {
   bagIcon,
@@ -8,21 +13,21 @@ import {
   heartIcon,
   plusIcon,
   searchIcon,
-  //tickIcon,
   clockIcon,
   arrowRightIcon,
   buttonApplyIcon,
   createButtonIcon,
 } from "./assets/icons";
 
-import {
-  recipeCategories,
-  filterSortOptions,
-} from "./constants/recipeCategories";
+import { recipeCategories } from "./constants/recipeCategories";
 
 import defaultRecipeImage from "./assets/images/defaultRecipeImage.svg";
 
-import { getRecipeTimeMinutes, splitRecipeText } from "./utils/normalizeRecipe";
+import {
+  createLocalRecipe,
+  getRecipeTimeMinutes,
+  splitRecipeText,
+} from "./utils/normalizeRecipe";
 
 import {
   getStoredFavoriteRecipeIds,
@@ -33,7 +38,14 @@ import {
   saveStoredRecipes,
 } from "./services/recipeStorage";
 
-import { getRecipesByCategory } from "./services/recipeApi";
+import {
+  getRecipeById,
+  getRecipesByCategory,
+  getRecipesBySearch,
+} from "./services/recipeApi";
+
+import { getBrowserLanguage, getLocalizedText } from "./utils/getLocalizedText";
+import { getLocalizedCategory } from "./constants/categoryTranslations";
 
 const DEFAULT_POPULAR_PAGE_SIZE = 3;
 const TABLET_POPULAR_PAGE_SIZE = 4;
@@ -47,7 +59,71 @@ const getPopularPageSize = () => {
     : DEFAULT_POPULAR_PAGE_SIZE;
 };
 
+const normalizeSearchValue = (value) => {
+  return String(value || "")
+    .trim()
+    .toLowerCase();
+};
+
+const doesRecipeMatchSearch = (recipe, searchQuery) => {
+  const normalizedSearchQuery = normalizeSearchValue(searchQuery);
+
+  if (!normalizedSearchQuery) {
+    return true;
+  }
+
+  const searchableValues = [
+    recipe.title,
+    recipe.ingredients,
+    recipe.area,
+    recipe.category,
+    ...(recipe.categories || []),
+  ];
+
+  return searchableValues.some((value) =>
+    normalizeSearchValue(value).includes(normalizedSearchQuery),
+  );
+};
+
+const getLocalizedRecipeTime = (recipe, language) => {
+  const timeMinutes =
+    typeof recipe.timeMinutes === "number"
+      ? recipe.timeMinutes
+      : getRecipeTimeMinutes(recipe.time);
+
+  if (!timeMinutes) return "—";
+
+  const hours = Math.floor(timeMinutes / 60);
+  const minutes = timeMinutes % 60;
+
+  if (language === "ru") {
+    if (hours > 0 && minutes > 0) {
+      return `${hours} ч ${minutes} мин`;
+    }
+
+    if (hours > 0) {
+      return `${hours} ч`;
+    }
+
+    return `${minutes} мин`;
+  }
+
+  if (hours > 0 && minutes > 0) {
+    return `${hours}h${minutes}min`;
+  }
+
+  if (hours > 0) {
+    return `${hours}h`;
+  }
+
+  return `${minutes}min`;
+};
+
 function App() {
+  const currentLanguage = getBrowserLanguage();
+
+  const t = (text) => getLocalizedText(text, currentLanguage);
+
   const [activeModal, setActiveModal] = useState(null);
   const [selectedRecipe, setSelectedRecipe] = useState(null);
   const [previewPhoto, setPreviewPhoto] = useState(null);
@@ -56,14 +132,17 @@ function App() {
   const [historyRecipes, setHistoryRecipes] = useState([]);
   const [recipes, setRecipes] = useState(() => getStoredRecipes());
   const [isRecipesLoading, setIsRecipesLoading] = useState(false);
+  const [isRecipeDetailsLoading, setIsRecipeDetailsLoading] = useState(false);
+  const [recipeDetailsError, setRecipeDetailsError] = useState("");
   const [recipesLoadingError, setRecipesLoadingError] = useState("");
   const [favoriteRecipeIds, setFavoriteRecipeIds] = useState(() =>
     getStoredFavoriteRecipeIds(),
   );
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeSearchQuery, setActiveSearchQuery] = useState("");
   const [myRecipeIds, setMyRecipeIds] = useState(() => getStoredMyRecipeIds());
   const [activeFilters, setActiveFilters] = useState({
     categories: [],
-    isPopularSortEnabled: false,
     minTimeMinutes: 0,
     maxTimeMinutes: Infinity,
   });
@@ -77,31 +156,30 @@ function App() {
     return window.matchMedia("(prefers-color-scheme: dark)").matches;
   });
 
-  const filteredRecipes = recipes
-    .filter((recipe) => {
-      const hasSelectedCategories = activeFilters.categories.length > 0;
+  const filteredRecipes = recipes.filter((recipe) => {
+    const hasSelectedCategories = activeFilters.categories.length > 0;
 
-      const currentRecipeCategories = recipe.categories || [];
+    const currentRecipeCategories = recipe.categories || [];
 
-      const matchesCategory =
-        !hasSelectedCategories ||
-        currentRecipeCategories.some((category) =>
-          activeFilters.categories.includes(category),
-        );
+    const matchesSearch = doesRecipeMatchSearch(recipe, activeSearchQuery);
 
-      const recipeTimeMinutes = getRecipeTimeMinutes(recipe.time);
+    const matchesCategory =
+      !hasSelectedCategories ||
+      currentRecipeCategories.some((category) =>
+        activeFilters.categories.includes(category),
+      );
 
-      const matchesTime =
-        recipeTimeMinutes >= activeFilters.minTimeMinutes &&
-        recipeTimeMinutes <= activeFilters.maxTimeMinutes;
+    const recipeTimeMinutes =
+      typeof recipe.timeMinutes === "number"
+        ? recipe.timeMinutes
+        : getRecipeTimeMinutes(recipe.time);
 
-      return matchesCategory && matchesTime;
-    })
-    .sort((firstRecipe, secondRecipe) => {
-      if (!activeFilters.isPopularSortEnabled) return 0;
+    const matchesTime =
+      recipeTimeMinutes >= activeFilters.minTimeMinutes &&
+      recipeTimeMinutes <= activeFilters.maxTimeMinutes;
 
-      return secondRecipe.likes - firstRecipe.likes;
-    });
+    return matchesSearch && matchesCategory && matchesTime;
+  });
 
   const popularRecipes = [...filteredRecipes].sort(
     (firstRecipe, secondRecipe) => secondRecipe.likes - firstRecipe.likes,
@@ -110,6 +188,85 @@ function App() {
   const applyFilters = (nextFilters) => {
     setActiveFilters(nextFilters);
     setPopularPage(0);
+  };
+
+  const handleSearchSubmit = async (event) => {
+    event.preventDefault();
+
+    const trimmedSearchQuery = searchQuery.trim();
+
+    setPopularPage(0);
+    setRecipesLoadingError("");
+
+    if (!trimmedSearchQuery) {
+      setActiveSearchQuery("");
+      setSearchQuery("");
+      return;
+    }
+
+    setActiveSearchQuery(trimmedSearchQuery);
+
+    try {
+      setIsRecipesLoading(true);
+
+      const apiRecipes = await getRecipesBySearch(trimmedSearchQuery);
+
+      setRecipes((currentRecipes) => {
+        const currentRecipesById = new Map(
+          currentRecipes.map((recipe) => [recipe.id, recipe]),
+        );
+
+        const mergedApiRecipes = apiRecipes.map((apiRecipe) => {
+          const savedRecipe = currentRecipesById.get(apiRecipe.id);
+          const isFavorite = favoriteRecipeIds.includes(apiRecipe.id);
+
+          if (!savedRecipe) {
+            return {
+              ...apiRecipe,
+              isLiked: isFavorite,
+            };
+          }
+
+          return {
+            ...apiRecipe,
+
+            likes: savedRecipe.likes || 0,
+            isLiked: isFavorite,
+            isUserCreated: savedRecipe.isUserCreated,
+
+            translations: savedRecipe.translations,
+
+            ingredients: savedRecipe.ingredients || apiRecipe.ingredients,
+            steps: savedRecipe.steps || apiRecipe.steps,
+
+            photos: apiRecipe.photos?.length
+              ? apiRecipe.photos
+              : savedRecipe.photos,
+
+            image: apiRecipe.image || savedRecipe.image,
+          };
+        });
+
+        const newApiRecipes = mergedApiRecipes.filter(
+          (apiRecipe) => !currentRecipesById.has(apiRecipe.id),
+        );
+
+        const updatedCurrentRecipes = currentRecipes.map((currentRecipe) => {
+          const updatedApiRecipe = mergedApiRecipes.find(
+            (apiRecipe) => apiRecipe.id === currentRecipe.id,
+          );
+
+          return updatedApiRecipe || currentRecipe;
+        });
+
+        return [...newApiRecipes, ...updatedCurrentRecipes];
+      });
+    } catch (error) {
+      console.error(error);
+      setRecipesLoadingError("Failed to search recipes");
+    } finally {
+      setIsRecipesLoading(false);
+    }
   };
 
   const popularStartIndex = popularPage * popularPageSize;
@@ -172,10 +329,7 @@ function App() {
     }
   };
 
-  const openRecipe = (recipe) => {
-    setSelectedRecipe(recipe);
-    setActiveModal("recipe");
-
+  const addRecipeToHistory = (recipe) => {
     setHistoryRecipes((currentHistory) => {
       const historyWithoutCurrentRecipe = currentHistory.filter(
         (historyRecipe) => historyRecipe.id !== recipe.id,
@@ -183,6 +337,189 @@ function App() {
 
       return [recipe, ...historyWithoutCurrentRecipe].slice(0, 7);
     });
+  };
+
+  const toggleRecipeFavorite = (recipeId) => {
+    const isAlreadyFavorite = favoriteRecipeIds.includes(recipeId);
+
+    setFavoriteRecipeIds((currentFavoriteIds) => {
+      if (isAlreadyFavorite) {
+        return currentFavoriteIds.filter(
+          (favoriteId) => favoriteId !== recipeId,
+        );
+      }
+
+      return [...currentFavoriteIds, recipeId];
+    });
+
+    setRecipes((currentRecipes) =>
+      currentRecipes.map((recipe) => {
+        if (recipe.id !== recipeId) return recipe;
+
+        const nextLikes = isAlreadyFavorite
+          ? Math.max((recipe.likes || 0) - 1, 0)
+          : (recipe.likes || 0) + 1;
+
+        return {
+          ...recipe,
+          isLiked: !isAlreadyFavorite,
+          likes: nextLikes,
+        };
+      }),
+    );
+
+    setSelectedRecipe((currentRecipe) => {
+      if (!currentRecipe || currentRecipe.id !== recipeId) {
+        return currentRecipe;
+      }
+
+      const nextLikes = isAlreadyFavorite
+        ? Math.max((currentRecipe.likes || 0) - 1, 0)
+        : (currentRecipe.likes || 0) + 1;
+
+      return {
+        ...currentRecipe,
+        isLiked: !isAlreadyFavorite,
+        likes: nextLikes,
+      };
+    });
+
+    setHistoryRecipes((currentHistory) =>
+      currentHistory.map((recipe) => {
+        if (recipe.id !== recipeId) return recipe;
+
+        const nextLikes = isAlreadyFavorite
+          ? Math.max((recipe.likes || 0) - 1, 0)
+          : (recipe.likes || 0) + 1;
+
+        return {
+          ...recipe,
+          isLiked: !isAlreadyFavorite,
+          likes: nextLikes,
+        };
+      }),
+    );
+  };
+
+  const createRecipe = (recipeData) => {
+    const newRecipe = createLocalRecipe(recipeData);
+
+    setRecipes((currentRecipes) => [newRecipe, ...currentRecipes]);
+
+    setMyRecipeIds((currentRecipeIds) => [newRecipe.id, ...currentRecipeIds]);
+
+    setPopularPage(0);
+    setActiveModal(null);
+  };
+
+  const deleteRecipe = (recipeId) => {
+    const recipeToDelete = recipes.find((recipe) => recipe.id === recipeId);
+
+    if (!recipeToDelete || !recipeToDelete.isUserCreated) {
+      return;
+    }
+
+    setRecipes((currentRecipes) =>
+      currentRecipes.filter((recipe) => recipe.id !== recipeId),
+    );
+
+    setMyRecipeIds((currentRecipeIds) =>
+      currentRecipeIds.filter((id) => id !== recipeId),
+    );
+
+    setFavoriteRecipeIds((currentFavoriteIds) =>
+      currentFavoriteIds.filter((id) => id !== recipeId),
+    );
+
+    setHistoryRecipes((currentHistory) =>
+      currentHistory.filter((recipe) => recipe.id !== recipeId),
+    );
+
+    setSelectedRecipe((currentRecipe) => {
+      if (currentRecipe?.id === recipeId) {
+        return null;
+      }
+
+      return currentRecipe;
+    });
+
+    if (selectedRecipe?.id === recipeId) {
+      setActiveModal(null);
+    }
+
+    setPopularPage(0);
+  };
+
+  const openRecipe = async (recipe) => {
+    setSelectedRecipe(recipe);
+    setActiveModal("recipe");
+    setRecipeDetailsError("");
+    addRecipeToHistory(recipe);
+
+    const isApiRecipe = recipe.source === "api";
+
+    if (!isApiRecipe) {
+      return;
+    }
+
+    try {
+      setIsRecipeDetailsLoading(true);
+
+      const hasFullRecipeData = Boolean(recipe.ingredients || recipe.steps);
+
+      const fullRecipe = hasFullRecipeData
+        ? recipe
+        : await getRecipeById(recipe.id);
+
+      if (!fullRecipe) {
+        throw new Error("Recipe was not found");
+      }
+
+      const isFavorite = favoriteRecipeIds.includes(recipe.id);
+
+      const fullRecipeWithSavedState = {
+        ...fullRecipe,
+
+        likes: recipe.likes || 0,
+        isLiked: isFavorite,
+        isUserCreated: recipe.isUserCreated,
+
+        category: fullRecipe.category || recipe.category,
+        categories: fullRecipe.categories?.length
+          ? fullRecipe.categories
+          : recipe.categories,
+
+        photos: fullRecipe.photos?.length ? fullRecipe.photos : recipe.photos,
+      };
+
+      let recipeForCurrentLanguage = fullRecipeWithSavedState;
+
+      if (currentLanguage === "ru") {
+        try {
+          recipeForCurrentLanguage = await translateRecipeToRussian(
+            fullRecipeWithSavedState,
+          );
+        } catch (error) {
+          console.error(error);
+        }
+      }
+
+      setRecipes((currentRecipes) =>
+        currentRecipes.map((currentRecipe) =>
+          currentRecipe.id === recipe.id
+            ? recipeForCurrentLanguage
+            : currentRecipe,
+        ),
+      );
+
+      setSelectedRecipe(recipeForCurrentLanguage);
+      addRecipeToHistory(recipeForCurrentLanguage);
+    } catch (error) {
+      console.error(error);
+      setRecipeDetailsError(t(uiText.detailsError));
+    } finally {
+      setIsRecipeDetailsLoading(false);
+    }
   };
 
   const closeModal = () => {
@@ -281,7 +618,7 @@ function App() {
               type="button"
               onClick={() => setActiveModal("create")}
             >
-              Create a recipe
+              {t(uiText.createRecipe)}
             </button>
 
             <button
@@ -289,7 +626,7 @@ function App() {
               type="button"
               onClick={() => setActiveModal("favorites")}
             >
-              Favorites
+              {t(uiText.favorites)}
             </button>
 
             <button
@@ -297,7 +634,7 @@ function App() {
               type="button"
               onClick={() => setActiveModal("myRecipes")}
             >
-              Your recipes
+              {t(uiText.yourRecipes)}
             </button>
           </nav>
         </div>
@@ -305,16 +642,15 @@ function App() {
 
       <main className="main">
         <section className="search">
-          <form
-            className="search__form"
-            onSubmit={(event) => event.preventDefault()}
-          >
+          <form className="search__form" onSubmit={handleSearchSubmit}>
             <input
               className="search__input"
               id="recipe-search"
               name="search"
               type="search"
               aria-label="Search recipes"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
             />
             <button
               className="search__submit"
@@ -358,22 +694,28 @@ function App() {
         <div className="main__content">
           <section className="recipes-board">
             <div className="popular">
-              <h2 className="popular__title">POPULAR RECIPES</h2>
+              <h2 className="popular__title">
+                {activeSearchQuery
+                  ? t(uiText.searchResults)
+                  : t(uiText.popularRecipes)}
+              </h2>
 
               <div className="popular__content">
                 <div className="popular__list">
                   {isRecipesLoading && (
-                    <p className="popular__empty">Loading recipes...</p>
+                    <p className="popular__empty">{t(uiText.loadingRecipes)}</p>
                   )}
 
                   {!isRecipesLoading && recipesLoadingError && (
-                    <p className="popular__empty">{recipesLoadingError}</p>
+                    <p className="popular__empty">
+                      {recipesLoadingError || t(uiText.loadingError)}
+                    </p>
                   )}
 
                   {!isRecipesLoading &&
                     !recipesLoadingError &&
                     visiblePopularRecipes.length === 0 && (
-                      <p className="popular__empty">No recipes found</p>
+                      <p className="popular__empty">{t(uiText.noRecipes)}</p>
                     )}
 
                   {!isRecipesLoading &&
@@ -382,6 +724,7 @@ function App() {
                       <RecipeCard
                         key={recipe.id}
                         recipe={recipe}
+                        language={currentLanguage}
                         onOpen={() => openRecipe(recipe)}
                       />
                     ))}
@@ -424,7 +767,11 @@ function App() {
             </div>
           </section>
 
-          <HistoryPanel recipes={historyRecipes} onOpen={openRecipe} />
+          <HistoryPanel
+            recipes={historyRecipes}
+            language={currentLanguage}
+            onOpen={openRecipe}
+          />
         </div>
       </main>
 
@@ -435,6 +782,7 @@ function App() {
           {activeModal === "filter" && (
             <FilterModal
               activeFilters={activeFilters}
+              language={currentLanguage}
               onApplyFilters={applyFilters}
               onClose={closeModal}
             />
@@ -443,38 +791,50 @@ function App() {
           {activeModal === "recipe" && (
             <RecipeModal
               recipe={selectedRecipe}
+              language={currentLanguage}
+              isLoading={isRecipeDetailsLoading}
+              error={recipeDetailsError}
               onClose={closeModal}
               onOpenPhoto={openPhotoPreview}
+              onToggleFavorite={toggleRecipeFavorite}
             />
           )}
 
           {activeModal === "create" && (
-            <CreateRecipeModal onClose={closeModal} />
+            <CreateRecipeModal
+              language={currentLanguage}
+              onCreateRecipe={createRecipe}
+              onClose={closeModal}
+            />
           )}
 
           {activeModal === "favorites" && (
             <RecipeCollectionModal
-              title="FAVORITES"
-              subtitle="all recipes that you like!"
-              actionLabel="UNLIKE"
+              title={t(uiText.favorites)}
+              subtitle={t(uiText.favoritesSubtitle)}
+              actionLabel={t(uiText.removeFromFavorites)}
               recipes={recipes.filter((recipe) =>
                 favoriteRecipeIds.includes(recipe.id),
               )}
+              language={currentLanguage}
               onClose={closeModal}
               onOpen={openRecipe}
+              onAction={toggleRecipeFavorite}
             />
           )}
 
           {activeModal === "myRecipes" && (
             <RecipeCollectionModal
-              title="YOUR RECIPES"
-              subtitle="all recipes that you had created"
-              actionLabel="DELETE"
+              title={t(uiText.yourRecipes)}
+              subtitle={t(uiText.yourRecipesSubtitle)}
+              actionLabel={t(uiText.delete)}
               recipes={recipes.filter((recipe) =>
                 myRecipeIds.includes(recipe.id),
               )}
+              language={currentLanguage}
               onClose={closeModal}
               onOpen={openRecipe}
+              onAction={deleteRecipe}
             />
           )}
         </div>
@@ -507,19 +867,22 @@ function App() {
   );
 }
 
-function RecipeCard({ recipe, onOpen }) {
+function RecipeCard({ recipe, language, onOpen }) {
+  const localizedTitle = getLocalizedRecipeField(recipe, "title", language);
+
   return (
     <article className="recipe-card">
       <button className="recipe-card__button" type="button" onClick={onOpen}>
         <img
           className="recipe-card__image"
           src={recipe.image || defaultRecipeImage}
-          alt={recipe.title}
+          alt={localizedTitle}
         />
 
         <div className="recipe-card__body">
           <div className="recipe-card__info">
-            <h3 className="recipe-card__title">{recipe.title}</h3>
+            <h3 className="recipe-card__title">{localizedTitle}</h3>
+
             <p className="recipe-card__time">
               <img
                 className="recipe-card__icon"
@@ -527,14 +890,16 @@ function RecipeCard({ recipe, onOpen }) {
                 alt=""
                 aria-hidden="true"
               />
-              {recipe.time}
+              <span className="recipe-card__time-text">
+                {getLocalizedRecipeTime(recipe, language)}
+              </span>
             </p>
           </div>
 
           <ul className="recipe-card__categories">
             {(recipe.categories || []).map((category, index) => (
               <li className="recipe-card__category" key={index}>
-                {category}
+                {getLocalizedCategory(category, language)}
               </li>
             ))}
           </ul>
@@ -554,10 +919,12 @@ function RecipeCard({ recipe, onOpen }) {
   );
 }
 
-function HistoryPanel({ recipes, onOpen }) {
+function HistoryPanel({ recipes, language, onOpen }) {
+  const t = (text) => getLocalizedText(text, language);
+
   return (
     <aside className="history">
-      <h2 className="history__title">HISTORY</h2>
+      <h2 className="history__title">{t(uiText.history)}</h2>
 
       <ul className="history__list">
         {recipes.map((recipe) => (
@@ -567,7 +934,7 @@ function HistoryPanel({ recipes, onOpen }) {
               type="button"
               onClick={() => onOpen(recipe)}
             >
-              {recipe.title}
+              {getLocalizedRecipeField(recipe, "title", language)}
             </button>
           </li>
         ))}
@@ -576,26 +943,32 @@ function HistoryPanel({ recipes, onOpen }) {
   );
 }
 
-function FilterModal({ activeFilters, onApplyFilters, onClose }) {
+function FilterModal({ activeFilters, language, onApplyFilters, onClose }) {
+  const t = (text) => getLocalizedText(text, language);
+
   const handleSubmit = (event) => {
     event.preventDefault();
 
     const formData = new FormData(event.currentTarget);
 
     const selectedCategories = formData.getAll("categories");
-    const isPopularSortEnabled = formData.get("sort") === "popular";
 
     const minHours = Number(formData.get("minHours") || 0);
     const minMinutes = Number(formData.get("minMinutes") || 0);
-    const maxHours = Number(formData.get("maxHours") || 0);
-    const maxMinutes = Number(formData.get("maxMinutes") || 0);
+
+    const maxHoursValue = formData.get("maxHours");
+    const maxMinutesValue = formData.get("maxMinutes");
+
+    const hasMaxTime = maxHoursValue !== "" || maxMinutesValue !== "";
+
+    const maxHours = Number(maxHoursValue || 0);
+    const maxMinutes = Number(maxMinutesValue || 0);
 
     const minTimeMinutes = minHours * 60 + minMinutes;
-    const maxTimeMinutes = maxHours * 60 + maxMinutes;
+    const maxTimeMinutes = hasMaxTime ? maxHours * 60 + maxMinutes : Infinity;
 
     onApplyFilters({
       categories: selectedCategories,
-      isPopularSortEnabled,
       minTimeMinutes,
       maxTimeMinutes,
     });
@@ -614,11 +987,13 @@ function FilterModal({ activeFilters, onApplyFilters, onClose }) {
         />
       </button>
 
-      <h2 className="modal__title">What recipe do you want?</h2>
+      <h2 className="modal__title">{t(uiText.filterTitle)}</h2>
 
       <form className="filter-form" onSubmit={handleSubmit}>
         <fieldset className="filter-form__group">
-          <legend className="filter-form__legend">Categories:</legend>
+          <legend className="filter-form__legend">
+            {t(uiText.categories)}
+          </legend>
 
           <div className="filter-form__categories">
             {recipeCategories.map((category) => (
@@ -630,34 +1005,21 @@ function FilterModal({ activeFilters, onApplyFilters, onClose }) {
                   value={category}
                   defaultChecked={activeFilters.categories.includes(category)}
                 />
-                <span className="filter-form__checkbox-text">{category}</span>
-              </label>
-            ))}
-          </div>
-
-          <p className="filter-form__legend filter-form__sort-title">Sort:</p>
-
-          <div className="filter-form__categories filter-form__sort">
-            {filterSortOptions.map((sortOption) => (
-              <label className="filter-form__checkbox" key={sortOption}>
-                <input
-                  className="filter-form__checkbox-input"
-                  type="checkbox"
-                  name="sort"
-                  value={sortOption}
-                  defaultChecked={activeFilters.isPopularSortEnabled}
-                />
-                <span className="filter-form__checkbox-text">{sortOption}</span>
+                <span className="filter-form__checkbox-text">
+                  {getLocalizedCategory(category, language)}
+                </span>
               </label>
             ))}
           </div>
         </fieldset>
 
         <fieldset className="filter-form__group filter-form__group--time">
-          <legend className="filter-form__legend">Time:</legend>
+          <legend className="filter-form__legend">{t(uiText.time)}</legend>
 
           <div className="filter-form__time-row">
-            <span className="filter-form__time-caption">Minimum:</span>
+            <span className="filter-form__time-caption">
+              {t(uiText.minimum)}
+            </span>
 
             <label className="filter-form__time-number">
               <input
@@ -669,7 +1031,7 @@ function FilterModal({ activeFilters, onApplyFilters, onClose }) {
                 step="1"
                 defaultValue={Math.floor(activeFilters.minTimeMinutes / 60)}
               />
-              h
+              {language === "ru" ? "ч" : "h"}
             </label>
 
             <label className="filter-form__time-number">
@@ -682,12 +1044,14 @@ function FilterModal({ activeFilters, onApplyFilters, onClose }) {
                 step="1"
                 defaultValue={activeFilters.minTimeMinutes % 60}
               />
-              min
+              {language === "ru" ? "мин" : "min"}
             </label>
           </div>
 
           <div className="filter-form__time-row">
-            <span className="filter-form__time-caption">Maximum:</span>
+            <span className="filter-form__time-caption">
+              {t(uiText.maximum)}
+            </span>
 
             <label className="filter-form__time-number">
               <input
@@ -699,11 +1063,11 @@ function FilterModal({ activeFilters, onApplyFilters, onClose }) {
                 step="1"
                 defaultValue={
                   activeFilters.maxTimeMinutes === Infinity
-                    ? 2
+                    ? ""
                     : Math.floor(activeFilters.maxTimeMinutes / 60)
                 }
               />
-              h
+              {language === "ru" ? "ч" : "h"}
             </label>
 
             <label className="filter-form__time-number">
@@ -716,18 +1080,18 @@ function FilterModal({ activeFilters, onApplyFilters, onClose }) {
                 step="1"
                 defaultValue={
                   activeFilters.maxTimeMinutes === Infinity
-                    ? 30
+                    ? ""
                     : activeFilters.maxTimeMinutes % 60
                 }
               />
-              min
+              {language === "ru" ? "мин" : "min"}
             </label>
           </div>
 
           <button
             className="filter-form__submit"
             type="submit"
-            aria-label="Apply filters"
+            aria-label={t(uiText.applyFilters)}
           >
             <img
               className="filter-form__submit-image"
@@ -742,24 +1106,39 @@ function FilterModal({ activeFilters, onApplyFilters, onClose }) {
   );
 }
 
-function RecipeModal({ recipe, onClose, onOpenPhoto }) {
+function RecipeModal({
+  recipe,
+  language,
+  isLoading,
+  error,
+  onClose,
+  onOpenPhoto,
+  onToggleFavorite,
+}) {
   const [areCookingPhotosExpanded, setAreCookingPhotosExpanded] =
     useState(false);
   if (!recipe) return null;
 
   const recipePhotos = recipe.photos?.filter(Boolean).slice(0, 6) || [];
 
-  const cookingPhotos =
-    recipePhotos.length > 0
-      ? recipePhotos
-      : Array.from({ length: 6 }, () => defaultRecipeImage);
+  const cookingPhotos = recipe.photos?.filter(Boolean).slice(0, 6) || [];
 
   const visibleCookingPhotos = areCookingPhotosExpanded
     ? cookingPhotos
     : cookingPhotos.slice(0, 2);
 
+  const hasCookingPhotos = cookingPhotos.length > 0;
   const hasHiddenCookingPhotos = cookingPhotos.length > 2;
+  const t = (text) => getLocalizedText(text, language);
+  const localizedIngredients = getLocalizedRecipeField(
+    recipe,
+    "ingredients",
+    language,
+  );
+  const ingredientItems = splitRecipeText(localizedIngredients);
+  const localizedSteps = getLocalizedRecipeField(recipe, "steps", language);
 
+  const stepItems = splitRecipeText(localizedSteps);
   return (
     <section className="modal modal--recipe" role="dialog" aria-modal="true">
       <button className="modal__close" type="button" onClick={onClose}>
@@ -773,8 +1152,14 @@ function RecipeModal({ recipe, onClose, onOpenPhoto }) {
 
       <div className="recipe-modal">
         <div className="recipe-modal__media">
-          <button className="recipe-modal__favorite" type="button">
-            ADD TO FAVORITES
+          <button
+            className="recipe-modal__favorite"
+            type="button"
+            onClick={() => onToggleFavorite(recipe.id)}
+          >
+            {recipe.isLiked
+              ? t(uiText.removeFromFavorites)
+              : t(uiText.addToFavorites)}
           </button>
 
           <img
@@ -785,7 +1170,9 @@ function RecipeModal({ recipe, onClose, onOpenPhoto }) {
         </div>
 
         <div className="recipe-modal__header">
-          <h2 className="recipe-modal__title">{recipe.title}</h2>
+          <h2 className="recipe-modal__title">
+            {getLocalizedRecipeField(recipe, "title", language)}
+          </h2>
 
           <div className="recipe-modal__meta">
             <span className="recipe-modal__time">
@@ -795,7 +1182,7 @@ function RecipeModal({ recipe, onClose, onOpenPhoto }) {
                 alt=""
                 aria-hidden="true"
               />
-              {recipe.time}
+              {getLocalizedRecipeTime(recipe, language)}
             </span>
             <span className="recipe-modal__likes">
               <img
@@ -811,77 +1198,113 @@ function RecipeModal({ recipe, onClose, onOpenPhoto }) {
 
         <div className="recipe-modal__ingredients">
           <div className="recipe-modal__ingredients-content">
-            <h3 className="recipe-modal__subtitle">Ingredients:</h3>
+            <h3 className="recipe-modal__subtitle">{t(uiText.ingredients)}</h3>
 
-            <ul className="recipe-modal__list">
-              {splitRecipeText(recipe.ingredients).map((ingredient, index) => (
-                <li key={index}>{ingredient}</li>
-              ))}
-            </ul>
+            {isLoading && (
+              <p className="recipe-modal__empty">{t(uiText.detailsLoading)}</p>
+            )}
+
+            {!isLoading && error && (
+              <p className="recipe-modal__empty">{error}</p>
+            )}
+
+            {!isLoading && !error && (
+              <ul className="recipe-modal__list">
+                {ingredientItems.length > 0 ? (
+                  ingredientItems.map((ingredient, index) => (
+                    <li key={index}>{ingredient}</li>
+                  ))
+                ) : (
+                  <li>{t(uiText.ingredientsEmpty)}</li>
+                )}
+              </ul>
+            )}
           </div>
         </div>
 
         <div className="recipe-modal__categories">
-          <h3 className="recipe-modal__subtitle">Categories:</h3>
+          <h3 className="recipe-modal__subtitle">{t(uiText.categories)}</h3>
 
           <ul className="recipe-modal__list">
             {(recipe.categories || []).map((category, index) => (
-              <li key={index}>{category}</li>
+              <li key={index}>{getLocalizedCategory(category, language)}</li>
             ))}
           </ul>
         </div>
 
         <div className="recipe-modal__steps">
           <div className="recipe-modal__steps-content">
-            <h3 className="recipe-modal__subtitle">STEPS:</h3>
+            <h3 className="recipe-modal__subtitle">{t(uiText.steps)}</h3>
 
-            <ol className="recipe-modal__steps-list">
-              {splitRecipeText(recipe.steps).map((step, index) => (
-                <li key={index}>{step}</li>
-              ))}
-            </ol>
+            {isLoading && (
+              <p className="recipe-modal__empty">{t(uiText.stepsLoading)}</p>
+            )}
+
+            {!isLoading && error && (
+              <p className="recipe-modal__empty">{error}</p>
+            )}
+
+            {!isLoading && !error && (
+              <ol className="recipe-modal__steps-list">
+                {stepItems.length > 0 ? (
+                  stepItems.map((step, index) => <li key={index}>{step}</li>)
+                ) : (
+                  <li>{t(uiText.stepsEmpty)}</li>
+                )}
+              </ol>
+            )}
           </div>
         </div>
 
         <div className="recipe-modal__photos">
-          <h3 className="recipe-modal__subtitle">COOKING PHOTOS:</h3>
+          <h3 className="recipe-modal__subtitle">{t(uiText.cookingPhotos)}</h3>
 
-          <div className="recipe-modal__photo-list">
-            {visibleCookingPhotos.map((photo, index) => (
-              <img
-                className="recipe-modal__photo"
-                src={photo}
-                alt={`Cooking step ${index + 1}`}
-                key={`${photo}-${index}`}
-                onClick={() => onOpenPhoto(photo)}
-              />
-            ))}
-          </div>
+          {hasCookingPhotos ? (
+            <>
+              <div className="recipe-modal__photo-list">
+                {visibleCookingPhotos.map((photo, index) => (
+                  <img
+                    className="recipe-modal__photo"
+                    src={photo}
+                    alt={`Cooking step ${index + 1}`}
+                    key={`${photo}-${index}`}
+                    onClick={() => onOpenPhoto(photo)}
+                  />
+                ))}
+              </div>
 
-          {hasHiddenCookingPhotos && (
-            <button
-              className={`recipe-modal__photos-toggle ${
-                areCookingPhotosExpanded
-                  ? "recipe-modal__photos-toggle--open"
-                  : ""
-              }`}
-              type="button"
-              aria-label={
-                areCookingPhotosExpanded
-                  ? "Hide cooking photos"
-                  : "Show more cooking photos"
-              }
-              onClick={() =>
-                setAreCookingPhotosExpanded((currentValue) => !currentValue)
-              }
-            >
-              <img
-                className="recipe-modal__photos-toggle-icon"
-                src={arrowRightIcon}
-                alt=""
-                aria-hidden="true"
-              />
-            </button>
+              {hasHiddenCookingPhotos && (
+                <button
+                  className={`recipe-modal__photos-toggle ${
+                    areCookingPhotosExpanded
+                      ? "recipe-modal__photos-toggle--open"
+                      : ""
+                  }`}
+                  type="button"
+                  aria-label={
+                    areCookingPhotosExpanded
+                      ? "Hide cooking photos"
+                      : "Show more cooking photos"
+                  }
+                  onClick={() =>
+                    setAreCookingPhotosExpanded((currentValue) => !currentValue)
+                  }
+                >
+                  <img
+                    className="recipe-modal__photos-toggle-icon"
+                    src={arrowRightIcon}
+                    alt=""
+                    aria-hidden="true"
+                  />
+                </button>
+              )}
+            </>
+          ) : (
+            <p className="recipe-modal__empty">
+              {language === "ru"
+                ? "Фото приготовления не добавлены"
+                : "Cooking photos have not been added"}
+            </p>
           )}
         </div>
       </div>
@@ -889,8 +1312,21 @@ function RecipeModal({ recipe, onClose, onOpenPhoto }) {
   );
 }
 
-function CreateRecipeModal({ onClose }) {
+const readFileAsDataUrl = (file) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+
+    reader.readAsDataURL(file);
+  });
+};
+
+function CreateRecipeModal({ language, onCreateRecipe, onClose }) {
+  const t = (text) => getLocalizedText(text, language);
   const [avatarPreview, setAvatarPreview] = useState(defaultRecipeImage);
+  const [avatarImage, setAvatarImage] = useState("");
   const [cookingPhotos, setCookingPhotos] = useState(Array(6).fill(null));
   const [activePhotoIndex, setActivePhotoIndex] = useState(null);
 
@@ -901,7 +1337,7 @@ function CreateRecipeModal({ onClose }) {
     avatarInputRef.current?.click();
   };
 
-  const handleAvatarChange = (event) => {
+  const handleAvatarChange = async (event) => {
     const file = event.target.files[0];
 
     if (!file) return;
@@ -909,18 +1345,27 @@ function CreateRecipeModal({ onClose }) {
     const temporaryImageUrl = URL.createObjectURL(file);
     const image = new Image();
 
-    image.onload = () => {
+    image.onload = async () => {
       const isValidAvatarSize =
         image.naturalWidth >= 427 && image.naturalHeight >= 80;
 
+      URL.revokeObjectURL(temporaryImageUrl);
+
       if (!isValidAvatarSize) {
-        URL.revokeObjectURL(temporaryImageUrl);
         event.target.value = "";
         alert("Avatar image must be at least 427px wide and 80px high.");
         return;
       }
 
-      setAvatarPreview(temporaryImageUrl);
+      try {
+        const dataUrl = await readFileAsDataUrl(file);
+
+        setAvatarPreview(dataUrl);
+        setAvatarImage(dataUrl);
+      } catch {
+        event.target.value = "";
+        alert("Could not read this image.");
+      }
     };
 
     image.onerror = () => {
@@ -940,20 +1385,62 @@ function CreateRecipeModal({ onClose }) {
     photosInputRef.current?.click();
   };
 
-  const handleCookingPhotoChange = (event) => {
+  const handleCookingPhotoChange = async (event) => {
     const file = event.target.files[0];
 
     if (!file || activePhotoIndex === null) return;
 
-    const temporaryImageUrl = URL.createObjectURL(file);
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
 
-    setCookingPhotos((currentPhotos) =>
-      currentPhotos.map((photo, index) =>
-        index === activePhotoIndex ? temporaryImageUrl : photo,
-      ),
-    );
+      setCookingPhotos((currentPhotos) =>
+        currentPhotos.map((photo, index) =>
+          index === activePhotoIndex ? dataUrl : photo,
+        ),
+      );
+    } catch {
+      alert("Could not read this image.");
+    } finally {
+      event.target.value = "";
+    }
+  };
 
-    event.target.value = "";
+  const handleSubmit = (event) => {
+    event.preventDefault();
+
+    const formData = new FormData(event.currentTarget);
+
+    const title = formData.get("recipeName")?.trim();
+    const ingredients = formData.get("ingredients")?.trim();
+
+    const steps = [...formData.entries()]
+      .filter(([name]) => name.startsWith("step-"))
+      .map(([, value]) => String(value).trim())
+      .filter(Boolean)
+      .join("\n");
+
+    const categories = formData.getAll("categories");
+
+    const hours = formData.get("hours");
+    const minutes = formData.get("minutes");
+
+    const photos = cookingPhotos.filter(Boolean);
+
+    if (!title || !ingredients || !steps) {
+      alert("Please fill in recipe name, ingredients and steps.");
+      return;
+    }
+
+    onCreateRecipe({
+      title,
+      ingredients,
+      steps,
+      categories,
+      image: avatarImage || defaultRecipeImage,
+      photos,
+      hours,
+      minutes,
+    });
   };
 
   return (
@@ -967,12 +1454,9 @@ function CreateRecipeModal({ onClose }) {
         />
       </button>
 
-      <form
-        className="create-form"
-        onSubmit={(event) => event.preventDefault()}
-      >
+      <form className="create-form" onSubmit={handleSubmit}>
         <div className="create-form__header">
-          <span className="create-form__name">Name your recipe:</span>
+          <span className="create-form__name">{t(uiText.nameRecipe)}</span>
 
           <label className="create-form__name-field" htmlFor="recipe-name">
             <input
@@ -987,9 +1471,9 @@ function CreateRecipeModal({ onClose }) {
 
         <div className="create-form__ingredients">
           <h2 className="create-form__title">
-            Add
+            {t(uiText.addIngredientsFirstLine)}
             <br />
-            ingredients
+            {t(uiText.addIngredientsSecondLine)}
           </h2>
 
           <div className="create-form__ingredients-paper">
@@ -1004,9 +1488,9 @@ function CreateRecipeModal({ onClose }) {
 
         <div className="create-form__steps">
           <h2 className="create-form__title">
-            Add some
+            {t(uiText.addStepsFirstLine)}
             <br />
-            steps
+            {t(uiText.addStepsSecondLine)}
           </h2>
 
           <div className="create-form__steps-editor-wrapper">
@@ -1043,7 +1527,7 @@ function CreateRecipeModal({ onClose }) {
             type="button"
             onClick={openAvatarFileDialog}
           >
-            <span>Change recipe avatar</span>
+            <span>{t(uiText.changeRecipeAvatar)}</span>
             <img
               className="create-form__edit-icon"
               src={editIcon}
@@ -1055,22 +1539,22 @@ function CreateRecipeModal({ onClose }) {
 
         <fieldset className="create-form__categories">
           <legend className="create-form__categories-title">
-            Add categories:
+            {t(uiText.addCategories)}
           </legend>
 
           {recipeCategories.map((category) => (
             <label className="create-form__category" key={category}>
               <input type="checkbox" name="categories" value={category} />
-              <span>{category}</span>
+              <span>{getLocalizedCategory(category, language)}</span>
             </label>
           ))}
         </fieldset>
 
         <div className="create-form__photos">
           <p className="create-form__photos-title">
-            You can add
+            {t(uiText.addCookingPhotoFirstLine)}
             <br />
-            steps/other photos
+            {t(uiText.addCookingPhotoSecondLine)}
           </p>
 
           <input
@@ -1119,9 +1603,9 @@ function CreateRecipeModal({ onClose }) {
 
         <fieldset className="create-form__time">
           <legend className="create-form__time-title">
-            How long does
+            {t(uiText.addTimeFirstLine)}
             <br />
-            cooking take?
+            {t(uiText.addTimeSecondLine)}
           </legend>
 
           <label className="create-form__time-label">
@@ -1132,7 +1616,7 @@ function CreateRecipeModal({ onClose }) {
               min="0"
               required
             />
-            hours
+            {t(uiText.timeHours)}
           </label>
 
           <label className="create-form__time-label">
@@ -1144,7 +1628,7 @@ function CreateRecipeModal({ onClose }) {
               max="59"
               required
             />
-            min
+            {t(uiText.timeMinutes)}
           </label>
         </fieldset>
 
@@ -1170,8 +1654,10 @@ function RecipeCollectionModal({
   subtitle,
   actionLabel,
   recipes,
+  language,
   onClose,
   onOpen,
+  onAction,
 }) {
   const [collectionPage, setCollectionPage] = useState(0);
 
@@ -1186,6 +1672,12 @@ function RecipeCollectionModal({
 
   const hasPrevCollectionRecipes = collectionPage > 0;
 
+  useEffect(() => {
+    if (collectionPage > 0 && collectionStartIndex >= recipes.length) {
+      setCollectionPage((currentPage) => Math.max(currentPage - 1, 0));
+    }
+  }, [collectionPage, collectionStartIndex, recipes.length]);
+
   const showNextCollectionRecipes = () => {
     if (hasNextCollectionRecipes) {
       setCollectionPage((currentPage) => currentPage + 1);
@@ -1197,6 +1689,7 @@ function RecipeCollectionModal({
       setCollectionPage((currentPage) => currentPage - 1);
     }
   };
+  const t = (text) => getLocalizedText(text, language);
 
   return (
     <section
@@ -1223,9 +1716,17 @@ function RecipeCollectionModal({
           {visibleCollectionRecipes.length > 0 ? (
             visibleCollectionRecipes.map((recipe) => (
               <div className="collection__item" key={recipe.id}>
-                <RecipeCard recipe={recipe} onOpen={() => onOpen(recipe)} />
+                <RecipeCard
+                  recipe={recipe}
+                  language={language}
+                  onOpen={() => onOpen(recipe)}
+                />
 
-                <button className="collection__action" type="button">
+                <button
+                  className="collection__action"
+                  type="button"
+                  onClick={() => onAction?.(recipe.id)}
+                >
                   <span className="collection__action-icon-wrap">
                     <img
                       className="collection__action-icon"
@@ -1239,7 +1740,7 @@ function RecipeCollectionModal({
               </div>
             ))
           ) : (
-            <p className="collection__empty">No recipes yet</p>
+            <p className="collection__empty">{t(uiText.noRecipes)}</p>
           )}
         </div>
 

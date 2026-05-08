@@ -27,6 +27,27 @@ export const getRecipeTimeMinutes = (time) => {
   return hours * 60 + minutes;
 };
 
+const estimatedRecipeTimeByCategory = {
+  Beef: 75,
+  Breakfast: 20,
+  Chicken: 45,
+  Dessert: 60,
+  Goat: 90,
+  Lamb: 90,
+  Miscellaneous: 40,
+  Pasta: 30,
+  Pork: 70,
+  Seafood: 25,
+  Side: 25,
+  Starter: 20,
+  Vegan: 35,
+  Vegetarian: 35,
+};
+
+const getEstimatedRecipeTimeMinutes = (category) => {
+  return estimatedRecipeTimeByCategory[category] || 40;
+};
+
 export const splitRecipeText = (text) => {
   if (!text) return [];
 
@@ -49,14 +70,15 @@ export const normalizeMealDbRecipe = (meal) => {
   }
 
   const category = meal.strCategory || "Miscellaneous";
+  const timeMinutes = getEstimatedRecipeTimeMinutes(category);
 
   return {
     id: `api-${meal.idMeal}`,
     source: "api",
 
     title: meal.strMeal || "Untitled recipe",
-    time: "—",
-    timeMinutes: 0,
+    time: formatTimeLabel(timeMinutes),
+    timeMinutes,
 
     likes: 0,
     isLiked: false,
