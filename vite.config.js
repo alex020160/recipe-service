@@ -8,4 +8,5 @@ export default defineConfig({
     port: 5173,
     allowedHosts: ["your-vpn-domain.local"],
   },
+  base: "/recipe-service/",
 });
