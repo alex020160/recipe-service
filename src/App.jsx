@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useCallback, useState, useRef, useEffect } from "react";
 import { uiText } from "./constants/uiText";
 import {
   getLocalizedRecipeField,
@@ -46,6 +46,17 @@ import {
 
 import { getBrowserLanguage, getLocalizedText } from "./utils/getLocalizedText";
 import { getLocalizedCategory } from "./constants/categoryTranslations";
+
+import {
+  createCommunityRecipe,
+  deleteCommunityRecipe,
+  getCommunityRecipes,
+  subscribeToCommunityRecipesChanges,
+  changeCommunityRecipeLikes,
+  getApiRecipeLikeCounts,
+  changeApiRecipeLikes,
+  subscribeToApiRecipeLikesChanges,
+} from "./services/communityRecipesApi";
 
 const DEFAULT_POPULAR_PAGE_SIZE = 3;
 const TABLET_POPULAR_PAGE_SIZE = 4;
@@ -130,7 +141,9 @@ function App() {
   const [popularPage, setPopularPage] = useState(0);
   const [popularPageSize, setPopularPageSize] = useState(getPopularPageSize);
   const [historyRecipes, setHistoryRecipes] = useState([]);
-  const [recipes, setRecipes] = useState(() => getStoredRecipes());
+  const [recipes, setRecipes] = useState(() =>
+    getStoredRecipes().filter((recipe) => recipe.source !== "community"),
+  );
   const [isRecipesLoading, setIsRecipesLoading] = useState(false);
   const [isRecipeDetailsLoading, setIsRecipeDetailsLoading] = useState(false);
   const [recipeDetailsError, setRecipeDetailsError] = useState("");
@@ -211,6 +224,10 @@ function App() {
 
       const apiRecipes = await getRecipesBySearch(trimmedSearchQuery);
 
+      const apiRecipeLikes = await getApiRecipeLikeCounts(
+        apiRecipes.map((recipe) => recipe.id),
+      );
+
       setRecipes((currentRecipes) => {
         const currentRecipesById = new Map(
           currentRecipes.map((recipe) => [recipe.id, recipe]),
@@ -223,6 +240,7 @@ function App() {
           if (!savedRecipe) {
             return {
               ...apiRecipe,
+              likes: apiRecipeLikes[apiRecipe.id] || 0,
               isLiked: isFavorite,
             };
           }
@@ -230,7 +248,7 @@ function App() {
           return {
             ...apiRecipe,
 
-            likes: savedRecipe.likes || 0,
+            likes: apiRecipeLikes[apiRecipe.id] ?? savedRecipe.likes ?? 0,
             isLiked: isFavorite,
             isUserCreated: savedRecipe.isUserCreated,
 
@@ -287,8 +305,108 @@ function App() {
     }
   };
 
+  const loadCommunityRecipes = useCallback(async () => {
+    try {
+      const communityRecipes = await getCommunityRecipes();
+
+      setRecipes((currentRecipes) => {
+        const currentRecipesWithoutCommunity = currentRecipes.filter(
+          (recipe) => recipe.source !== "community",
+        );
+
+        const communityRecipesWithState = communityRecipes.map((recipe) => ({
+          ...recipe,
+          isUserCreated: myRecipeIds.includes(recipe.id),
+        }));
+
+        return [
+          ...communityRecipesWithState,
+          ...currentRecipesWithoutCommunity,
+        ];
+      });
+    } catch (error) {
+      console.error(error);
+    }
+  }, [myRecipeIds]);
+
+  const applyApiRecipeLikes = useCallback((recipeId, likes) => {
+    const updateRecipeLikes = (recipe) => {
+      if (!recipe || recipe.id !== recipeId) return recipe;
+
+      return {
+        ...recipe,
+        likes,
+      };
+    };
+
+    setRecipes((currentRecipes) =>
+      currentRecipes.map((recipe) => updateRecipeLikes(recipe)),
+    );
+
+    setSelectedRecipe((currentRecipe) => updateRecipeLikes(currentRecipe));
+
+    setHistoryRecipes((currentHistory) =>
+      currentHistory.map((recipe) => updateRecipeLikes(recipe)),
+    );
+  }, []);
+
+  const apiRecipeIdsKey = recipes
+    .filter((recipe) => recipe.source === "api")
+    .map((recipe) => recipe.id)
+    .sort()
+    .join("|");
+
+  const loadApiRecipeLikes = useCallback(async () => {
+    try {
+      const apiRecipeIds = apiRecipeIdsKey.split("|").filter(Boolean);
+
+      if (apiRecipeIds.length === 0) return;
+
+      const likesByRecipeId = await getApiRecipeLikeCounts(apiRecipeIds);
+
+      setRecipes((currentRecipes) =>
+        currentRecipes.map((recipe) => {
+          if (recipe.source !== "api") return recipe;
+
+          return {
+            ...recipe,
+            likes: likesByRecipeId[recipe.id] || 0,
+          };
+        }),
+      );
+
+      setSelectedRecipe((currentRecipe) => {
+        if (!currentRecipe || currentRecipe.source !== "api") {
+          return currentRecipe;
+        }
+
+        return {
+          ...currentRecipe,
+          likes: likesByRecipeId[currentRecipe.id] || 0,
+        };
+      });
+
+      setHistoryRecipes((currentHistory) =>
+        currentHistory.map((recipe) => {
+          if (recipe.source !== "api") return recipe;
+
+          return {
+            ...recipe,
+            likes: likesByRecipeId[recipe.id] || 0,
+          };
+        }),
+      );
+    } catch (error) {
+      console.error(error);
+    }
+  }, [apiRecipeIdsKey]);
+
   useEffect(() => {
-    saveStoredRecipes(recipes);
+    const recipesForStorage = recipes.filter(
+      (recipe) => recipe.source !== "community",
+    );
+
+    saveStoredRecipes(recipesForStorage);
   }, [recipes]);
 
   useEffect(() => {
@@ -296,32 +414,56 @@ function App() {
   }, [favoriteRecipeIds]);
 
   useEffect(() => {
+    const applyFavoriteState = (recipe) => {
+      if (!recipe) return recipe;
+
+      return {
+        ...recipe,
+        isLiked: favoriteRecipeIds.includes(recipe.id),
+      };
+    };
+
+    setRecipes((currentRecipes) => currentRecipes.map(applyFavoriteState));
+
+    setSelectedRecipe((currentRecipe) => applyFavoriteState(currentRecipe));
+
+    setHistoryRecipes((currentHistory) =>
+      currentHistory.map(applyFavoriteState),
+    );
+  }, [favoriteRecipeIds]);
+
+  useEffect(() => {
     saveStoredMyRecipeIds(myRecipeIds);
   }, [myRecipeIds]);
 
   useEffect(() => {
-    const tabletMediaQuery = window.matchMedia(
-      "(min-width: 768px) and (max-width: 1024px)",
-    );
+    loadCommunityRecipes();
+  }, [loadCommunityRecipes]);
 
-    const updatePopularPageSize = () => {
-      setPopularPageSize(
-        tabletMediaQuery.matches
-          ? TABLET_POPULAR_PAGE_SIZE
-          : DEFAULT_POPULAR_PAGE_SIZE,
-      );
+  useEffect(() => {
+    loadApiRecipeLikes();
+  }, [loadApiRecipeLikes]);
 
-      setPopularPage(0);
-    };
+  useEffect(() => {
+    const unsubscribe = subscribeToCommunityRecipesChanges(() => {
+      loadCommunityRecipes();
+    });
 
-    updatePopularPageSize();
+    return unsubscribe;
+  }, [loadCommunityRecipes]);
 
-    tabletMediaQuery.addEventListener("change", updatePopularPageSize);
+  useEffect(() => {
+    const unsubscribe = subscribeToApiRecipeLikesChanges((payload) => {
+      const changedRecipeId = payload.new?.recipe_id;
+      const changedLikes = payload.new?.likes;
 
-    return () => {
-      tabletMediaQuery.removeEventListener("change", updatePopularPageSize);
-    };
-  }, []);
+      if (!changedRecipeId || typeof changedLikes !== "number") return;
+
+      applyApiRecipeLikes(changedRecipeId, changedLikes);
+    });
+
+    return unsubscribe;
+  }, [applyApiRecipeLikes]);
 
   const showPrevPopularRecipes = () => {
     if (hasPrevPopularRecipes) {
@@ -339,115 +481,192 @@ function App() {
     });
   };
 
-  const toggleRecipeFavorite = (recipeId) => {
+  const toggleRecipeFavorite = async (recipeId) => {
+    const recipeToUpdate = recipes.find((recipe) => recipe.id === recipeId);
+
+    if (!recipeToUpdate) return;
+
     const isAlreadyFavorite = favoriteRecipeIds.includes(recipeId);
 
-    setFavoriteRecipeIds((currentFavoriteIds) => {
-      if (isAlreadyFavorite) {
-        return currentFavoriteIds.filter(
-          (favoriteId) => favoriteId !== recipeId,
-        );
-      }
+    const likesDelta = isAlreadyFavorite ? -1 : 1;
+    const nextIsLiked = !isAlreadyFavorite;
 
-      return [...currentFavoriteIds, recipeId];
-    });
+    const nextFavoriteRecipeIds = isAlreadyFavorite
+      ? favoriteRecipeIds.filter((favoriteId) => favoriteId !== recipeId)
+      : [...new Set([...favoriteRecipeIds, recipeId])];
 
-    setRecipes((currentRecipes) =>
-      currentRecipes.map((recipe) => {
-        if (recipe.id !== recipeId) return recipe;
-
-        const nextLikes = isAlreadyFavorite
-          ? Math.max((recipe.likes || 0) - 1, 0)
-          : (recipe.likes || 0) + 1;
-
-        return {
-          ...recipe,
-          isLiked: !isAlreadyFavorite,
-          likes: nextLikes,
-        };
-      }),
+    const optimisticLikes = Math.max(
+      (recipeToUpdate.likes || 0) + likesDelta,
+      0,
     );
 
-    setSelectedRecipe((currentRecipe) => {
-      if (!currentRecipe || currentRecipe.id !== recipeId) {
-        return currentRecipe;
-      }
+    setFavoriteRecipeIds(nextFavoriteRecipeIds);
 
-      const nextLikes = isAlreadyFavorite
-        ? Math.max((currentRecipe.likes || 0) - 1, 0)
-        : (currentRecipe.likes || 0) + 1;
+    const applyOptimisticRecipeState = (recipe) => {
+      if (!recipe || recipe.id !== recipeId) return recipe;
 
       return {
-        ...currentRecipe,
-        isLiked: !isAlreadyFavorite,
-        likes: nextLikes,
+        ...recipe,
+        isLiked: nextIsLiked,
+        likes: optimisticLikes,
       };
-    });
+    };
+
+    setRecipes((currentRecipes) =>
+      currentRecipes.map((recipe) => applyOptimisticRecipeState(recipe)),
+    );
+
+    setSelectedRecipe((currentRecipe) =>
+      applyOptimisticRecipeState(currentRecipe),
+    );
 
     setHistoryRecipes((currentHistory) =>
-      currentHistory.map((recipe) => {
-        if (recipe.id !== recipeId) return recipe;
+      currentHistory.map((recipe) => applyOptimisticRecipeState(recipe)),
+    );
 
-        const nextLikes = isAlreadyFavorite
-          ? Math.max((recipe.likes || 0) - 1, 0)
-          : (recipe.likes || 0) + 1;
+    const shouldSyncLikes =
+      recipeToUpdate.source === "community" || recipeToUpdate.source === "api";
+
+    if (!shouldSyncLikes) {
+      return;
+    }
+
+    try {
+      const updatedRecipe =
+        recipeToUpdate.source === "community"
+          ? await changeCommunityRecipeLikes(recipeId, likesDelta)
+          : await changeApiRecipeLikes(recipeId, likesDelta);
+
+      const applyUpdatedRecipeState = (recipe) => {
+        if (!recipe || recipe.id !== recipeId) return recipe;
 
         return {
           ...recipe,
-          isLiked: !isAlreadyFavorite,
-          likes: nextLikes,
+          likes: updatedRecipe.likes,
+          isLiked: nextIsLiked,
         };
-      }),
-    );
+      };
+
+      setRecipes((currentRecipes) =>
+        currentRecipes.map((recipe) => applyUpdatedRecipeState(recipe)),
+      );
+
+      setSelectedRecipe((currentRecipe) =>
+        applyUpdatedRecipeState(currentRecipe),
+      );
+
+      setHistoryRecipes((currentHistory) =>
+        currentHistory.map((recipe) => applyUpdatedRecipeState(recipe)),
+      );
+    } catch (error) {
+      console.error(error);
+
+      setFavoriteRecipeIds(favoriteRecipeIds);
+
+      setRecipes((currentRecipes) =>
+        currentRecipes.map((recipe) =>
+          recipe.id === recipeId ? recipeToUpdate : recipe,
+        ),
+      );
+
+      setSelectedRecipe((currentRecipe) => {
+        if (!currentRecipe || currentRecipe.id !== recipeId) {
+          return currentRecipe;
+        }
+
+        return recipeToUpdate;
+      });
+
+      setHistoryRecipes((currentHistory) =>
+        currentHistory.map((recipe) =>
+          recipe.id === recipeId ? recipeToUpdate : recipe,
+        ),
+      );
+
+      alert("Could not update likes.");
+    }
   };
 
-  const createRecipe = (recipeData) => {
-    const newRecipe = createLocalRecipe(recipeData);
+  const createRecipe = async (recipeData) => {
+    try {
+      const localRecipe = createLocalRecipe(recipeData);
 
-    setRecipes((currentRecipes) => [newRecipe, ...currentRecipes]);
+      let recipeToSave = localRecipe;
 
-    setMyRecipeIds((currentRecipeIds) => [newRecipe.id, ...currentRecipeIds]);
+      if (currentLanguage === "ru") {
+        recipeToSave = await translateRecipeToRussian(localRecipe);
+      }
 
-    setPopularPage(0);
-    setActiveModal(null);
+      const communityRecipe = await createCommunityRecipe(recipeToSave);
+
+      const communityRecipeWithState = {
+        ...communityRecipe,
+        isUserCreated: true,
+        isLiked: false,
+      };
+
+      setRecipes((currentRecipes) => [
+        communityRecipeWithState,
+        ...currentRecipes,
+      ]);
+
+      setMyRecipeIds((currentRecipeIds) => [
+        ...new Set([communityRecipe.id, ...currentRecipeIds]),
+      ]);
+
+      setPopularPage(0);
+      setActiveModal(null);
+    } catch (error) {
+      console.error(error);
+      alert("Could not create recipe.");
+    }
   };
 
-  const deleteRecipe = (recipeId) => {
+  const deleteRecipe = async (recipeId) => {
     const recipeToDelete = recipes.find((recipe) => recipe.id === recipeId);
 
     if (!recipeToDelete || !recipeToDelete.isUserCreated) {
       return;
     }
 
-    setRecipes((currentRecipes) =>
-      currentRecipes.filter((recipe) => recipe.id !== recipeId),
-    );
-
-    setMyRecipeIds((currentRecipeIds) =>
-      currentRecipeIds.filter((id) => id !== recipeId),
-    );
-
-    setFavoriteRecipeIds((currentFavoriteIds) =>
-      currentFavoriteIds.filter((id) => id !== recipeId),
-    );
-
-    setHistoryRecipes((currentHistory) =>
-      currentHistory.filter((recipe) => recipe.id !== recipeId),
-    );
-
-    setSelectedRecipe((currentRecipe) => {
-      if (currentRecipe?.id === recipeId) {
-        return null;
+    try {
+      if (recipeToDelete.source === "community") {
+        await deleteCommunityRecipe(recipeId);
       }
 
-      return currentRecipe;
-    });
+      setRecipes((currentRecipes) =>
+        currentRecipes.filter((recipe) => recipe.id !== recipeId),
+      );
 
-    if (selectedRecipe?.id === recipeId) {
-      setActiveModal(null);
+      setMyRecipeIds((currentRecipeIds) =>
+        currentRecipeIds.filter((id) => id !== recipeId),
+      );
+
+      setFavoriteRecipeIds((currentFavoriteIds) =>
+        currentFavoriteIds.filter((id) => id !== recipeId),
+      );
+
+      setHistoryRecipes((currentHistory) =>
+        currentHistory.filter((recipe) => recipe.id !== recipeId),
+      );
+
+      setSelectedRecipe((currentRecipe) => {
+        if (currentRecipe?.id === recipeId) {
+          return null;
+        }
+
+        return currentRecipe;
+      });
+
+      if (selectedRecipe?.id === recipeId) {
+        setActiveModal(null);
+      }
+
+      setPopularPage(0);
+    } catch (error) {
+      console.error(error);
+      alert("Could not delete recipe.");
     }
-
-    setPopularPage(0);
   };
 
   const openRecipe = async (recipe) => {
@@ -456,20 +675,16 @@ function App() {
     setRecipeDetailsError("");
     addRecipeToHistory(recipe);
 
-    const isApiRecipe = recipe.source === "api";
-
-    if (!isApiRecipe) {
-      return;
-    }
-
     try {
       setIsRecipeDetailsLoading(true);
 
+      const isApiRecipe = recipe.source === "api";
       const hasFullRecipeData = Boolean(recipe.ingredients || recipe.steps);
 
-      const fullRecipe = hasFullRecipeData
-        ? recipe
-        : await getRecipeById(recipe.id);
+      const fullRecipe =
+        isApiRecipe && !hasFullRecipeData
+          ? await getRecipeById(recipe.id)
+          : recipe;
 
       if (!fullRecipe) {
         throw new Error("Recipe was not found");
@@ -541,7 +756,9 @@ function App() {
 
   useEffect(() => {
     const loadInitialRecipes = async () => {
-      if (recipes.length > 0) return;
+      const hasApiRecipes = recipes.some((recipe) => recipe.source === "api");
+
+      if (hasApiRecipes) return;
 
       try {
         setIsRecipesLoading(true);
@@ -565,7 +782,27 @@ function App() {
           )
           .flat();
 
-        setRecipes(loadedRecipes);
+        const apiRecipeLikes = await getApiRecipeLikeCounts(
+          loadedRecipes.map((recipe) => recipe.id),
+        );
+
+        const loadedRecipesWithLikes = loadedRecipes.map((recipe) => ({
+          ...recipe,
+          likes: apiRecipeLikes[recipe.id] || 0,
+          isLiked: favoriteRecipeIds.includes(recipe.id),
+        }));
+
+        setRecipes((currentRecipes) => {
+          const currentRecipeIds = new Set(
+            currentRecipes.map((recipe) => recipe.id),
+          );
+
+          const newLoadedRecipes = loadedRecipesWithLikes.filter(
+            (recipe) => !currentRecipeIds.has(recipe.id),
+          );
+
+          return [...currentRecipes, ...newLoadedRecipes];
+        });
       } catch (error) {
         console.error(error);
         setRecipesLoadingError("Failed to load recipes");
@@ -812,7 +1049,7 @@ function App() {
             <RecipeCollectionModal
               title={t(uiText.favorites)}
               subtitle={t(uiText.favoritesSubtitle)}
-              actionLabel={t(uiText.removeFromFavorites)}
+              actionLabel={t(uiText.removeFromFavoritesList)}
               recipes={recipes.filter((recipe) =>
                 favoriteRecipeIds.includes(recipe.id),
               )}
@@ -1118,8 +1355,6 @@ function RecipeModal({
   const [areCookingPhotosExpanded, setAreCookingPhotosExpanded] =
     useState(false);
   if (!recipe) return null;
-
-  const recipePhotos = recipe.photos?.filter(Boolean).slice(0, 6) || [];
 
   const cookingPhotos = recipe.photos?.filter(Boolean).slice(0, 6) || [];
 

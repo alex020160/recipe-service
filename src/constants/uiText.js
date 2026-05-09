@@ -7,7 +7,10 @@ export const uiText = {
     en: "UNLIKE",
     ru: "- ИЗ ИЗБРАННОГО",
   },
-
+  removeFromFavoritesList: {
+    en: "UNLIKE",
+    ru: "УДАЛИТЬ",
+  },
   popularRecipes: {
     en: "POPULAR RECIPES",
     ru: "ПОПУЛЯРНОЕ",

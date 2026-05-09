@@ -1946,7 +1946,7 @@ button:focus {
     grid-row: 1;
     align-self: start;
 
-    width: 290px;
+    width: 272px;
     height: 460px;
     margin-top: 200px;
 
@@ -1983,6 +1983,10 @@ button:focus {
     margin-top: -30px;
     padding-top: 12px;
     transform: translateX(-45px);
+  }
+
+  .create-form__textarea--ingredients {
+    padding-top: 10px;
   }
 }
 
