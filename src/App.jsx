@@ -4,6 +4,11 @@ import { translateRecipeToRussian } from "./utils/translateRecipe";
 import { createLocalRecipe } from "./utils/normalizeRecipe";
 
 import {
+  INITIAL_RECIPE_CATEGORIES,
+  INITIAL_RECIPES_PER_CATEGORY,
+} from "./data/initialRecipes";
+
+import {
   filterRecipes,
   paginateRecipes,
   sortRecipesByLikes,
@@ -66,7 +71,9 @@ function App() {
   const [popularPageSize, setPopularPageSize] = useState(getPopularPageSize);
   const [historyRecipes, setHistoryRecipes] = useState([]);
   const [recipes, setRecipes] = useState(() =>
-    getStoredRecipes().filter((recipe) => recipe.source !== "community"),
+    getStoredRecipes().filter(
+      (recipe) => recipe.source !== "community" && recipe.source !== "api",
+    ),
   );
   const [isRecipesLoading, setIsRecipesLoading] = useState(false);
   const [isRecipeDetailsLoading, setIsRecipeDetailsLoading] = useState(false);
@@ -307,7 +314,7 @@ function App() {
 
   useEffect(() => {
     const recipesForStorage = recipes.filter(
-      (recipe) => recipe.source !== "community",
+      (recipe) => recipe.source !== "community" && recipe.source !== "api",
     );
 
     saveStoredRecipes(recipesForStorage);
@@ -668,21 +675,17 @@ function App() {
         setIsRecipesLoading(true);
         setRecipesLoadingError("");
 
-        const categoriesToLoad = [
-          "Chicken",
-          "Dessert",
-          "Pasta",
-          "Seafood",
-          "Vegetarian",
-        ];
-
         const recipesByCategories = await Promise.all(
-          categoriesToLoad.map((category) => getRecipesByCategory(category)),
+          INITIAL_RECIPE_CATEGORIES.map((category) =>
+            getRecipesByCategory(category),
+          ),
         );
 
         const loadedRecipes = recipesByCategories
           .map((categoryRecipes) =>
-            categoryRecipes.filter((recipe) => recipe.image).slice(0, 4),
+            categoryRecipes
+              .filter((recipe) => recipe.image)
+              .slice(0, INITIAL_RECIPES_PER_CATEGORY),
           )
           .flat();
 
