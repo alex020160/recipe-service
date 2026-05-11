@@ -19,14 +19,25 @@ const getFallbackRecipesBySearch = (query) => {
   }
 
   return fallbackRecipes.filter((recipe) => {
-    return (
-      recipe.title.toLowerCase().includes(normalizedQuery) ||
-      recipe.ingredients.toLowerCase().includes(normalizedQuery) ||
-      recipe.category.toLowerCase().includes(normalizedQuery) ||
-      recipe.categories.some((category) =>
-        category.toLowerCase().includes(normalizedQuery),
-      )
-    );
+    const ruTranslation = recipe.translations?.ru || {};
+
+    const searchText = [
+      recipe.title,
+      recipe.ingredients,
+      recipe.steps,
+      recipe.category,
+      ...(recipe.categories || []),
+
+      ruTranslation.title,
+      ruTranslation.ingredients,
+      ruTranslation.steps,
+      ruTranslation.category,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+
+    return searchText.includes(normalizedQuery);
   });
 };
 

@@ -105,6 +105,21 @@
   overflow-y: auto;
   overflow-x: hidden;
   padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: rgb(0 0 0 / 35%) transparent;
+}
+
+.recipe-modal__ingredients-content::-webkit-scrollbar {
+  width: 4px;
+}
+
+.recipe-modal__ingredients-content::-webkit-scrollbar-track {
+  background-color: transparent;
+}
+
+.recipe-modal__ingredients-content::-webkit-scrollbar-thumb {
+  border-radius: 10px;
+  background-color: rgb(0 0 0 / 35%);
 }
 
 .recipe-modal__ingredients .recipe-modal__list {
@@ -178,6 +193,8 @@
   overflow-y: auto;
   overflow-x: hidden;
   padding-right: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: rgb(0 0 0 / 35%) transparent;
 }
 
 .recipe-modal__steps-list {
