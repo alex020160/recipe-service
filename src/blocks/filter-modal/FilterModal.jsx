@@ -1,4 +1,4 @@
-import { closeIcon, buttonApplyIcon } from "../../assets/icons";
+import { closeIcon, buttonApplyEn, buttonApplyRu } from "../../assets/icons";
 import { recipeCategories } from "../../constants/recipeCategories";
 import { uiText } from "../../constants/uiText";
 import { getLocalizedCategory } from "../../constants/categoryTranslations";
@@ -6,6 +6,9 @@ import { getLocalizedText } from "../../utils/getLocalizedText";
 
 function FilterModal({ activeFilters, language, onApplyFilters, onClose }) {
   const t = (text) => getLocalizedText(text, language);
+  const buttonApply = language === "ru" ? buttonApplyRu : buttonApplyEn;
+
+  const applyButtonLabel = t(uiText.apply);
 
   const handleSubmit = (event) => {
     event.preventDefault();
@@ -152,11 +155,12 @@ function FilterModal({ activeFilters, language, onApplyFilters, onClose }) {
           <button
             className="filter-form__submit"
             type="submit"
-            aria-label={t(uiText.applyFilters)}
+            aria-label={applyButtonLabel}
+            data-label={applyButtonLabel}
           >
             <img
               className="filter-form__submit-image"
-              src={buttonApplyIcon}
+              src={buttonApply}
               alt=""
               aria-hidden="true"
             />

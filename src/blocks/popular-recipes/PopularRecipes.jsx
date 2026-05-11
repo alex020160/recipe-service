@@ -43,9 +43,9 @@ function PopularRecipes({
 
           {!isRecipesLoading &&
             !recipesLoadingError &&
-            visibleRecipes.map((recipe) => (
+            visibleRecipes.map((recipe, index) => (
               <RecipeCard
-                key={recipe.id}
+                key={`${recipe.id}-${index}`}
                 recipe={recipe}
                 language={language}
                 onOpen={() => onOpenRecipe(recipe)}

@@ -1,0 +1,262 @@
+.modal--collection {
+  width: 1185px;
+  min-height: 820px;
+  padding: 56px 64px 54px;
+  border-radius: 7px;
+}
+
+.collection {
+  position: relative;
+}
+
+.collection__header {
+  margin-bottom: 80px;
+}
+
+.collection__title {
+  margin-bottom: 10px;
+  font-family: var(--font-title);
+  font-size: 50px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: 35px;
+  text-transform: uppercase;
+}
+
+.collection__subtitle {
+  font-size: 26px;
+  line-height: 1;
+  letter-spacing: 9px;
+}
+
+.collection__grid {
+  display: grid;
+  grid-template-columns: repeat(2, 430px);
+  gap: 58px 70px;
+}
+
+.collection__item {
+  position: relative;
+}
+
+.collection__action {
+  display: grid;
+  grid-template-columns: 54px 1fr;
+  align-items: stretch;
+  width: 207px;
+  height: 35px;
+  margin: 8px auto 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid #d4d4d4;
+  background-color: var(--color-white);
+  box-shadow: 3px 4px 6px rgb(0 0 0 / 25%);
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 35px;
+  text-transform: uppercase;
+}
+
+.collection__action-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 54px;
+  height: 33px;
+
+  background-color: var(--color-accent);
+}
+
+.collection__action-icon {
+  display: block;
+  width: 24px;
+  height: 20px;
+  padding: 0;
+
+  background-color: transparent;
+  object-fit: contain;
+}
+
+.collection__controls {
+  position: absolute;
+  top: 355px;
+  right: 28px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+
+  width: 62px;
+}
+
+.collection__nav-button {
+  width: 62px;
+  height: 62px;
+  padding: 0;
+  border: none;
+  background-color: transparent;
+  cursor: pointer;
+}
+
+.collection__nav-icon {
+  display: block;
+  width: 62px;
+  height: 62px;
+  object-fit: contain;
+}
+
+.collection__nav-icon--prev {
+  transform: rotate(180deg);
+}
+
+.collection__empty {
+  grid-column: 1 / -1;
+  font-size: 24px;
+}
+
+.page--dark .collection__title {
+  color: var(--text-main);
+}
+
+.page--dark .collection__action-icon-wrap {
+  background-color: var(--surface-input);
+}
+
+.page--dark .collection__action-icon {
+  filter: brightness(0);
+}
+
+@media (min-width: 768px) and (max-width: 1024px) {
+  .modal--collection {
+    max-width: 470px;
+    padding: 42px 38px 34px;
+  }
+
+  .collection__header {
+    margin-bottom: 20px;
+    text-align: center;
+  }
+
+  .collection__title {
+    margin-bottom: 6px;
+    font-size: 30px;
+    letter-spacing: 12px;
+  }
+
+  .collection__subtitle {
+    font-size: 15px;
+    letter-spacing: 3px;
+  }
+
+  .collection__grid {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .collection__item {
+    width: var(--recipe-card-width);
+  }
+
+  .collection__action {
+    width: 160px;
+    height: 28px;
+    grid-template-columns: 42px 1fr;
+    margin-top: 7px;
+    font-size: 15px;
+    line-height: 28px;
+  }
+
+  .collection__action-icon {
+    width: 42px;
+    height: 26px;
+    padding: 3px 13px;
+    margin-bottom: 5px;
+  }
+
+  .collection__controls {
+    position: static;
+    width: 100%;
+    margin-top: 14px;
+    gap: 8px;
+  }
+
+  .collection__nav-button {
+    width: 40px;
+    height: 40px;
+  }
+
+  .collection__nav-icon {
+    width: 40px;
+    height: 40px;
+  }
+}
+
+@media (max-width: 767px) {
+  .modal--collection {
+    max-width: 355px;
+    padding: 42px 18px 28px;
+  }
+
+  .collection__header {
+    margin-bottom: 18px;
+    text-align: center;
+  }
+
+  .collection__title {
+    margin-bottom: 4px;
+    font-size: 22px;
+    letter-spacing: 10px;
+  }
+
+  .collection__subtitle {
+    font-size: 11px;
+    letter-spacing: 2px;
+  }
+
+  .collection__grid {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 18px;
+  }
+
+  .collection__item {
+    width: var(--recipe-card-width);
+  }
+
+  .collection__action {
+    width: 155px;
+    height: 28px;
+    grid-template-columns: 42px 1fr;
+    margin-top: 8px;
+    font-size: 12px;
+    line-height: 28px;
+  }
+
+  .collection__action-icon {
+    width: 50px;
+    height: 50px;
+    padding: 6px 16px;
+  }
+
+  .collection__controls {
+    position: static;
+    width: 100%;
+    margin-top: 14px;
+    gap: 8px;
+  }
+
+  .collection__nav-button {
+    width: 28px;
+    height: 28px;
+  }
+
+  .collection__nav-icon {
+    width: 28px;
+    height: 28px;
+  }
+}

@@ -187,4 +187,8 @@ export const uiText = {
     en: "min",
     ru: "минут",
   },
+  apply: {
+    en: "Apply",
+    ru: "Применить",
+  },
 };

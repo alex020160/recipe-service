@@ -7,8 +7,10 @@ import plusIcon from "./plus.svg";
 import searchIcon from "./search.svg";
 import clockIcon from "./time-circle.svg";
 import arrowRightIcon from "./vector.svg";
-import buttonApplyIcon from "./button-apply.svg";
-import createButtonIcon from "./create-button.svg";
+import buttonApplyEn from "./button-apply_en.svg";
+import buttonApplyRu from "./button-apply_ru.svg";
+import createButtonEn from "./create-button_en.svg";
+import createButtonRu from "./create-button_ru.svg";
 export {
   bagIcon,
   closeIcon,
@@ -19,6 +21,8 @@ export {
   searchIcon,
   clockIcon,
   arrowRightIcon,
-  buttonApplyIcon,
-  createButtonIcon,
+  buttonApplyEn,
+  buttonApplyRu,
+  createButtonEn,
+  createButtonRu,
 };

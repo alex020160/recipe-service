@@ -54,16 +54,22 @@ const mapRecipeToDatabase = (recipe) => {
 };
 
 export const getCommunityRecipes = async () => {
-  const { data, error } = await supabase
-    .from("recipes")
-    .select("*")
-    .order("likes", { ascending: false });
+  try {
+    const { data, error } = await supabase
+      .from("recipes")
+      .select("*")
+      .order("likes", { ascending: false });
 
-  if (error) {
-    throw error;
+    if (error) {
+      throw error;
+    }
+
+    return data.map(mapRecipeFromDatabase);
+  } catch (error) {
+    console.error("Community recipes are unavailable.", error);
+
+    return null;
   }
-
-  return data.map(mapRecipeFromDatabase);
 };
 
 export const createCommunityRecipe = async (recipe) => {
@@ -81,18 +87,24 @@ export const createCommunityRecipe = async (recipe) => {
 };
 
 export const changeCommunityRecipeLikes = async (recipeId, likesDelta) => {
-  const { data, error } = await supabase
-    .rpc("change_recipe_likes", {
-      recipe_id: recipeId,
-      likes_delta: likesDelta,
-    })
-    .single();
+  try {
+    const { data, error } = await supabase
+      .rpc("change_recipe_likes", {
+        recipe_id: recipeId,
+        likes_delta: likesDelta,
+      })
+      .single();
 
-  if (error) {
-    throw error;
+    if (error) {
+      throw error;
+    }
+
+    return mapRecipeFromDatabase(data);
+  } catch (error) {
+    console.error("Community recipe like update is unavailable.", error);
+
+    return null;
   }
-
-  return mapRecipeFromDatabase(data);
 };
 
 export const deleteCommunityRecipe = async (recipeId) => {
@@ -127,37 +139,49 @@ export const getApiRecipeLikeCounts = async (recipeIds) => {
     return {};
   }
 
-  const { data, error } = await supabase
-    .from("api_recipe_likes")
-    .select("recipe_id, likes")
-    .in("recipe_id", recipeIds);
+  try {
+    const { data, error } = await supabase
+      .from("api_recipe_likes")
+      .select("recipe_id, likes")
+      .in("recipe_id", recipeIds);
 
-  if (error) {
-    throw error;
+    if (error) {
+      throw error;
+    }
+
+    return data.reduce((likesByRecipeId, item) => {
+      likesByRecipeId[item.recipe_id] = item.likes || 0;
+      return likesByRecipeId;
+    }, {});
+  } catch (error) {
+    console.error("API recipe likes are unavailable.", error);
+
+    return {};
   }
-
-  return data.reduce((likesByRecipeId, item) => {
-    likesByRecipeId[item.recipe_id] = item.likes || 0;
-    return likesByRecipeId;
-  }, {});
 };
 
 export const changeApiRecipeLikes = async (recipeId, likesDelta) => {
-  const { data, error } = await supabase
-    .rpc("change_api_recipe_likes", {
-      target_recipe_id: recipeId,
-      likes_delta: likesDelta,
-    })
-    .single();
+  try {
+    const { data, error } = await supabase
+      .rpc("change_api_recipe_likes", {
+        target_recipe_id: recipeId,
+        likes_delta: likesDelta,
+      })
+      .single();
 
-  if (error) {
-    throw error;
+    if (error) {
+      throw error;
+    }
+
+    return {
+      id: data.recipe_id,
+      likes: data.likes || 0,
+    };
+  } catch (error) {
+    console.error("API recipe like update is unavailable.", error);
+
+    return null;
   }
-
-  return {
-    id: data.recipe_id,
-    likes: data.likes || 0,
-  };
 };
 
 export const subscribeToApiRecipeLikesChanges = (onChange) => {

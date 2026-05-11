@@ -1,0 +1,332 @@
+.main,
+.recipes-board,
+.popular,
+.history {
+  min-height: 0;
+}
+
+body {
+  font-family: var(--font-main-text);
+}
+
+button:focus {
+  outline: none;
+}
+
+.page {
+  display: grid;
+  grid-template-columns: 485px 1fr;
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+  background-color: var(--color-white);
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+  padding: 50px 0px 20px;
+}
+
+.main::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 485px;
+  right: -28px;
+  height: 30px;
+  z-index: 0;
+  background: linear-gradient(
+    to bottom,
+    rgb(53 47 47 / 40%) 0%,
+    rgb(53 47 47 / 20%) 45%,
+    rgb(255 255 255 / 100%) 100%
+  );
+}
+
+.main > * {
+  position: relative;
+  z-index: 1;
+}
+
+.main__content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 330px;
+  column-gap: 16px;
+
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 0 10px 0 30px;
+}
+
+.page--dark {
+  background-color: var(--surface-page);
+  color: var(--text-main);
+}
+
+.page--dark .main {
+  background-color: var(--surface-page);
+}
+
+.page--dark .main::before {
+  background: linear-gradient(
+    to bottom,
+    rgb(23 19 17 / 90%) 0%,
+    rgb(23 19 17 / 45%) 45%,
+    rgb(23 19 17 / 0%) 100%
+  );
+}
+
+@media (min-width: 768px) and (max-width: 1024px) {
+  :root {
+    --page-min-width: 0;
+    --search-width: 420px;
+    --search-height: 40px;
+    --recipe-card-width: 350px;
+    --recipe-card-height: 150px;
+    --recipe-card-image-height: 80px;
+  }
+
+  body:has(.page--dark) {
+    background-color: #000;
+  }
+
+  html,
+  body,
+  #root {
+    width: 100%;
+    min-width: 0;
+    height: auto;
+    min-height: 100%;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+  body {
+    min-width: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    background-color: #f8edad;
+  }
+
+  .page {
+    position: relative;
+    display: block;
+    width: 100%;
+    min-width: 0;
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
+    background-color: #f8edad;
+  }
+
+  .page::before {
+    content: "";
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+
+    height: 28px;
+    z-index: 2000;
+    pointer-events: none;
+
+    background: linear-gradient(
+      to bottom,
+      rgb(53 47 47 / 70%) 0%,
+      rgb(53 47 47 / 20%) 65%,
+      rgb(53 47 47 / 0%) 100%
+    );
+  }
+
+  .page::after {
+    content: "";
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+
+    height: 42px;
+    z-index: 2000;
+    pointer-events: none;
+
+    background: linear-gradient(
+      to top,
+      rgb(53 47 47 / 70%) 0%,
+      rgb(53 47 47 / 25%) 60%,
+      rgb(53 47 47 / 0%) 100%
+    );
+  }
+
+  .main {
+    display: block;
+    width: 100%;
+    height: auto;
+    padding: 0 0 60px;
+    overflow: visible;
+    background-color: #f8edad;
+  }
+
+  .main::before {
+    display: none;
+  }
+
+  .main__content {
+    display: flex;
+    flex-direction: column;
+    gap: 52px;
+
+    width: 100%;
+    min-height: 0;
+    padding: 0 0 80px;
+  }
+
+  .page.page--dark {
+    background-color: var(--surface-page);
+  }
+
+  .page.page--dark::before {
+    background: linear-gradient(
+      to bottom,
+      rgb(23 19 17 / 90%) 0%,
+      rgb(23 19 17 / 35%) 65%,
+      rgb(23 19 17 / 0%) 100%
+    );
+  }
+
+  .page.page--dark::after {
+    background: linear-gradient(
+      to top,
+      rgb(23 19 17 / 90%) 0%,
+      rgb(23 19 17 / 35%) 60%,
+      rgb(23 19 17 / 0%) 100%
+    );
+  }
+
+  .page--dark .main {
+    background-color: var(--surface-page);
+  }
+}
+
+@media (max-width: 767px) {
+  :root {
+    --page-min-width: 0;
+    --search-width: 230px;
+    --search-height: 24px;
+    --recipe-card-width: 285px;
+    --recipe-card-height: 105px;
+    --recipe-card-image-height: 58px;
+  }
+
+  body:has(.page--dark) {
+    background-color: #000;
+  }
+
+  html,
+  body,
+  #root {
+    width: 100%;
+    min-width: 0;
+    height: auto;
+    min-height: 100%;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  body {
+    min-width: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    background-color: #f8edad;
+  }
+  .page {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
+    background-color: #f8edad;
+  }
+
+  .page::after {
+    content: "";
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+
+    height: 36px;
+    z-index: 2000;
+    pointer-events: none;
+
+    background: linear-gradient(
+      to top,
+      rgb(53 47 47 / 70%) 0%,
+      rgb(53 47 47 / 28%) 55%,
+      rgb(53 47 47 / 0%) 100%
+    );
+  }
+
+  .main {
+    display: block;
+    width: 100%;
+    height: auto;
+    overflow: visible;
+    padding: 0 0 34px;
+    background-color: #f8edad;
+  }
+
+  .page::before {
+    content: "";
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 27px;
+    z-index: 2000;
+    pointer-events: none;
+
+    background: linear-gradient(
+      to bottom,
+      rgb(53 47 47 / 60%) 0%,
+      rgb(53 47 47 / 15%) 50%,
+      rgb(53 47 47 / 10%) 100%
+    );
+  }
+
+  .main__content {
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+    width: 100%;
+    min-height: 0;
+    padding: 0 0 40px;
+  }
+
+  .page.page--dark {
+    background-color: var(--surface-page);
+  }
+
+  .page.page--dark::before {
+    background: linear-gradient(
+      to bottom,
+      rgb(23 19 17 / 90%) 0%,
+      rgb(23 19 17 / 35%) 50%,
+      rgb(23 19 17 / 0%) 100%
+    );
+  }
+  .page.page--dark::after {
+    background: linear-gradient(
+      to top,
+      rgb(23 19 17 / 90%) 0%,
+      rgb(23 19 17 / 35%) 55%,
+      rgb(23 19 17 / 0%) 100%
+    );
+  }
+
+  .page--dark .main {
+    background-color: var(--surface-page);
+  }
+}

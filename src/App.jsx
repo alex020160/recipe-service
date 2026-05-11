@@ -59,6 +59,18 @@ const getPopularPageSize = () => {
     : DEFAULT_POPULAR_PAGE_SIZE;
 };
 
+const getUniqueRecipesById = (recipes) => {
+  const recipesById = new Map();
+
+  recipes.forEach((recipe) => {
+    if (!recipe?.id || recipesById.has(recipe.id)) return;
+
+    recipesById.set(recipe.id, recipe);
+  });
+
+  return Array.from(recipesById.values());
+};
+
 function App() {
   const currentLanguage = getBrowserLanguage();
 
@@ -71,9 +83,15 @@ function App() {
   const [popularPageSize, setPopularPageSize] = useState(getPopularPageSize);
   const [historyRecipes, setHistoryRecipes] = useState([]);
   const [recipes, setRecipes] = useState(() =>
-    getStoredRecipes().filter(
-      (recipe) => recipe.source !== "community" && recipe.source !== "api",
-    ),
+    getStoredRecipes().filter((recipe) => {
+      if (recipe.source === "api") return false;
+
+      if (recipe.source === "community") {
+        return recipe.isUserCreated;
+      }
+
+      return true;
+    }),
   );
   const [isRecipesLoading, setIsRecipesLoading] = useState(false);
   const [isRecipeDetailsLoading, setIsRecipeDetailsLoading] = useState(false);
@@ -220,7 +238,15 @@ function App() {
     try {
       const communityRecipes = await getCommunityRecipes();
 
+      if (!Array.isArray(communityRecipes)) {
+        return;
+      }
+
       setRecipes((currentRecipes) => {
+        const currentUserCreatedCommunityRecipes = currentRecipes.filter(
+          (recipe) => recipe.source === "community" && recipe.isUserCreated,
+        );
+
         const currentRecipesWithoutCommunity = currentRecipes.filter(
           (recipe) => recipe.source !== "community",
         );
@@ -230,10 +256,11 @@ function App() {
           isUserCreated: myRecipeIds.includes(recipe.id),
         }));
 
-        return [
+        return getUniqueRecipesById([
           ...communityRecipesWithState,
+          ...currentUserCreatedCommunityRecipes,
           ...currentRecipesWithoutCommunity,
-        ];
+        ]);
       });
     } catch (error) {
       console.error(error);
@@ -313,9 +340,15 @@ function App() {
   }, [apiRecipeIdsKey]);
 
   useEffect(() => {
-    const recipesForStorage = recipes.filter(
-      (recipe) => recipe.source !== "community" && recipe.source !== "api",
-    );
+    const recipesForStorage = recipes.filter((recipe) => {
+      if (recipe.source === "api") return false;
+
+      if (recipe.source === "community") {
+        return recipe.isUserCreated;
+      }
+
+      return true;
+    });
 
     saveStoredRecipes(recipesForStorage);
   }, [recipes]);
@@ -448,6 +481,10 @@ function App() {
           ? await changeCommunityRecipeLikes(recipeId, likesDelta)
           : await changeApiRecipeLikes(recipeId, likesDelta);
 
+      if (!updatedRecipe) {
+        return;
+      }
+
       const applyUpdatedRecipeState = (recipe) => {
         if (!recipe || recipe.id !== recipeId) return recipe;
 
@@ -499,38 +536,50 @@ function App() {
   };
 
   const createRecipe = async (recipeData) => {
-    try {
-      const localRecipe = createLocalRecipe(recipeData);
+    const localRecipe = createLocalRecipe(recipeData);
 
-      let recipeToSave = localRecipe;
+    let recipeToSave = localRecipe;
 
-      if (currentLanguage === "ru") {
+    if (currentLanguage === "ru") {
+      try {
         recipeToSave = await translateRecipeToRussian(localRecipe);
+      } catch (error) {
+        console.error("Could not translate local recipe.", error);
+        recipeToSave = localRecipe;
       }
-
-      const communityRecipe = await createCommunityRecipe(recipeToSave);
-
-      const communityRecipeWithState = {
-        ...communityRecipe,
-        isUserCreated: true,
-        isLiked: false,
-      };
-
-      setRecipes((currentRecipes) => [
-        communityRecipeWithState,
-        ...currentRecipes,
-      ]);
-
-      setMyRecipeIds((currentRecipeIds) => [
-        ...new Set([communityRecipe.id, ...currentRecipeIds]),
-      ]);
-
-      setPopularPage(0);
-      setActiveModal(null);
-    } catch (error) {
-      console.error(error);
-      alert("Could not create recipe.");
     }
+
+    let createdRecipe;
+
+    try {
+      createdRecipe = await createCommunityRecipe(recipeToSave);
+    } catch (error) {
+      console.error("Supabase is unavailable. Recipe is saved locally.", error);
+
+      createdRecipe = {
+        ...recipeToSave,
+        id: recipeToSave.id || `local-${Date.now()}`,
+        source: "local",
+      };
+    }
+
+    const createdRecipeWithState = {
+      ...createdRecipe,
+      isUserCreated: true,
+      isLiked: false,
+      likes: createdRecipe.likes || 0,
+    };
+
+    setRecipes((currentRecipes) =>
+      getUniqueRecipesById([createdRecipeWithState, ...currentRecipes]),
+    );
+
+    setMyRecipeIds((currentRecipeIds) => [
+      ...new Set([createdRecipeWithState.id, ...currentRecipeIds]),
+    ]);
+
+    setPopularPage(0);
+    setActiveModal(null);
   };
 
   const deleteRecipe = async (recipeId) => {
@@ -540,44 +589,46 @@ function App() {
       return;
     }
 
-    try {
-      if (recipeToDelete.source === "community") {
+    if (recipeToDelete.source === "community") {
+      try {
         await deleteCommunityRecipe(recipeId);
+      } catch (error) {
+        console.error(
+          "Supabase is unavailable. Recipe is deleted locally only.",
+          error,
+        );
       }
-
-      setRecipes((currentRecipes) =>
-        currentRecipes.filter((recipe) => recipe.id !== recipeId),
-      );
-
-      setMyRecipeIds((currentRecipeIds) =>
-        currentRecipeIds.filter((id) => id !== recipeId),
-      );
-
-      setFavoriteRecipeIds((currentFavoriteIds) =>
-        currentFavoriteIds.filter((id) => id !== recipeId),
-      );
-
-      setHistoryRecipes((currentHistory) =>
-        currentHistory.filter((recipe) => recipe.id !== recipeId),
-      );
-
-      setSelectedRecipe((currentRecipe) => {
-        if (currentRecipe?.id === recipeId) {
-          return null;
-        }
-
-        return currentRecipe;
-      });
-
-      if (selectedRecipe?.id === recipeId) {
-        setActiveModal(null);
-      }
-
-      setPopularPage(0);
-    } catch (error) {
-      console.error(error);
-      alert("Could not delete recipe.");
     }
+
+    setRecipes((currentRecipes) =>
+      currentRecipes.filter((recipe) => recipe.id !== recipeId),
+    );
+
+    setMyRecipeIds((currentRecipeIds) =>
+      currentRecipeIds.filter((id) => id !== recipeId),
+    );
+
+    setFavoriteRecipeIds((currentFavoriteIds) =>
+      currentFavoriteIds.filter((id) => id !== recipeId),
+    );
+
+    setHistoryRecipes((currentHistory) =>
+      currentHistory.filter((recipe) => recipe.id !== recipeId),
+    );
+
+    setSelectedRecipe((currentRecipe) => {
+      if (currentRecipe?.id === recipeId) {
+        return null;
+      }
+
+      return currentRecipe;
+    });
+
+    if (selectedRecipe?.id === recipeId) {
+      setActiveModal(null);
+    }
+
+    setPopularPage(0);
   };
 
   const openRecipe = async (recipe) => {
@@ -667,9 +718,11 @@ function App() {
 
   useEffect(() => {
     const loadInitialRecipes = async () => {
-      const hasApiRecipes = recipes.some((recipe) => recipe.source === "api");
+      const hasInitialRecipes = recipes.some((recipe) =>
+        ["api", "fallback"].includes(recipe.source),
+      );
 
-      if (hasApiRecipes) return;
+      if (hasInitialRecipes) return;
 
       try {
         setIsRecipesLoading(true);
@@ -681,13 +734,15 @@ function App() {
           ),
         );
 
-        const loadedRecipes = recipesByCategories
-          .map((categoryRecipes) =>
-            categoryRecipes
-              .filter((recipe) => recipe.image)
-              .slice(0, INITIAL_RECIPES_PER_CATEGORY),
-          )
-          .flat();
+        const loadedRecipes = getUniqueRecipesById(
+          recipesByCategories
+            .map((categoryRecipes) =>
+              categoryRecipes
+                .filter((recipe) => recipe.image)
+                .slice(0, INITIAL_RECIPES_PER_CATEGORY),
+            )
+            .flat(),
+        );
 
         const apiRecipeLikes = await getApiRecipeLikeCounts(
           loadedRecipes.map((recipe) => recipe.id),
@@ -708,18 +763,18 @@ function App() {
             (recipe) => !currentRecipeIds.has(recipe.id),
           );
 
-          return [...currentRecipes, ...newLoadedRecipes];
+          return getUniqueRecipesById([...currentRecipes, ...newLoadedRecipes]);
         });
       } catch (error) {
         console.error(error);
-        setRecipesLoadingError("Failed to load recipes");
+        setRecipesLoadingError(t(uiText.loadingError));
       } finally {
         setIsRecipesLoading(false);
       }
     };
 
     loadInitialRecipes();
-  }, [recipes.length]);
+  }, [recipes.length, favoriteRecipeIds, t]);
 
   useEffect(() => {
     const handleEscKey = (event) => {

@@ -3,7 +3,8 @@ import {
   closeIcon,
   editIcon,
   plusIcon,
-  createButtonIcon,
+  createButtonEn,
+  createButtonRu,
 } from "../../assets/icons";
 import defaultRecipeImage from "../../assets/images/defaultRecipeImage.svg";
 import { recipeCategories } from "../../constants/recipeCategories";
@@ -26,6 +27,7 @@ const readFileAsDataUrl = (file) => {
 
 function CreateRecipeModal({ language, onCreateRecipe, onClose }) {
   const t = (text) => getLocalizedText(text, language);
+  const createButtonImage = language === "ru" ? createButtonRu : createButtonEn;
 
   const [avatarPreview, setAvatarPreview] = useState(defaultRecipeImage);
   const [avatarImage, setAvatarImage] = useState("");
@@ -347,8 +349,8 @@ function CreateRecipeModal({ language, onCreateRecipe, onClose }) {
         >
           <img
             className="create-form__submit-image"
-            src={createButtonIcon}
-            alt=""
+            src={createButtonImage}
+            alt={language === "ru" ? "Создать рецепт" : "Create recipe"}
             aria-hidden="true"
           />
         </button>
